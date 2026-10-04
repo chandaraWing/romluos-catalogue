@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root,
+  .light {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 240 6% 97.5%;
+    --card-foreground: 222.2 84% 4.9%;
+    --primary: 74 59% 51%; /* #A9CB37 Lime */
+    --primary-hover: 75 63% 41%; /* #89aa26 */
+    --primary-foreground: 85 85% 10%; /* Dark text for contrast on lime */
+    --secondary: 212 100% 50%; /* #0077FF Blue */
+    --secondary-hover: 215 100% 45%; /* #005fe6 */
+    --secondary-foreground: 0 0% 100%; /* White */
+    --accent: 212 100% 50%; /* #0077FF Blue */
+    --accent-hover: 215 100% 45%;
+    --accent-foreground: 0 0% 100%;
+    --border: 0 0% 90%;
+    --input: 0 0% 90%;
+    --bg-surface: #FFFFFF;
+    --bg-surface-elevated: #F6F8FA;
+    --text-primary: #0F172A;
+    --text-secondary: #475569;
+    --border-color: #E2E8F0;
+    --accent-gradient: linear-gradient(264.19deg, rgba(169, 203, 55, 0) -7.67%, rgba(169, 203, 55, 0.1) 14.51%, rgba(169, 203, 55, 0.96) 46.63%, #0077FF 88.34%);
+    --brand-gradient-multi: linear-gradient(264.06deg, #0077FF -99.77%, rgba(169, 203, 55, 0.96) -47.75%, rgba(169, 203, 55, 0.1) -1.37%, rgba(169, 203, 55, 0.96) 55.55%, #0077FF 91.47%);
+    --brand-gradient-flow: linear-gradient(264.06deg, #0077FF -99.77%, rgba(169, 203, 55, 0.96) -47.75%, rgba(169, 203, 55, 0.1) -1.37%, rgba(169, 203, 55, 0.96) 55.55%, #0077FF 91.47%);
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 6.5%;
+    --card-foreground: 210 40% 98%;
+    --primary: 74 59% 51%; /* #A9CB37 Lime */
+    --primary-hover: 74 65% 58%;
+    --primary-foreground: 85 85% 10%;
+    --secondary: 212 100% 50%; /* #0077FF Blue */
+    --secondary-hover: 212 100% 60%;
+    --secondary-foreground: 0 0% 100%;
+    --accent: 212 100% 50%; /* #0077FF Blue */
+    --accent-hover: 212 100% 60%;
+    --accent-foreground: 0 0% 100%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --bg-surface: #070B14;
+    --bg-surface-elevated: #0F172A;
+    --text-primary: #F8FAFC;
+    --text-secondary: #94A3B8;
+    --border-color: #1E293B;
+  }
+}
+
+body {
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+  min-height: 100vh;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.glass-panel {
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.light .glass-panel {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.badge-active {
+  background-color: rgba(169, 203, 55, 0.15);
+  color: #A9CB37;
+  border: 1px solid rgba(169, 203, 55, 0.3);
+}
