@@ -1,14 +1,14 @@
-import CryptoJS from 'crypto-js';
+import { AES, Utf8, Base64, CipherParams, CBC, Pkcs7 } from 'crypto-es';
 import JSEncrypt from 'jsencrypt';
 
 const DEFAULT_AES_IV = 'ZzNjB2Y6rYJ5JH2a';
 const DEFAULT_AES_KEY = 'UGpRMH7Frk7od2Ql';
 
-const getAesIv = (iv: string = DEFAULT_AES_IV) => CryptoJS.enc.Utf8.parse(iv);
-const getAesKey = (key: string = DEFAULT_AES_KEY) => CryptoJS.enc.Utf8.parse(key);
+const getAesIv = (iv: string = DEFAULT_AES_IV) => Utf8.parse(iv);
+const getAesKey = (key: string = DEFAULT_AES_KEY) => Utf8.parse(key);
 const parseBase64CipherText = (value: string) =>
-  CryptoJS.lib.CipherParams.create({
-    ciphertext: CryptoJS.enc.Base64.parse(value),
+  CipherParams.create({
+    ciphertext: Base64.parse(value),
   });
 
 const removeWhitespace = (value: string) => {
@@ -50,12 +50,12 @@ export const decodePublicKey = (pubKey: string) => {
 
 export const aesDecrypt = (value: string) => {
   try {
-    const decrypted = CryptoJS.AES.decrypt(parseBase64CipherText(value.trim()), getAesKey(), {
+    const decrypted = AES.decrypt(parseBase64CipherText(value.trim()), getAesKey(), {
       iv: getAesIv(),
-      mode: CryptoJS.mode.CBC,
-      padding: CryptoJS.pad.Pkcs7,
+      mode: CBC,
+      padding: Pkcs7,
     });
-    return decrypted.toString(CryptoJS.enc.Utf8);
+    return decrypted.toString(Utf8);
   } catch (error) {
     throw new Error(`CipherManager cannot decrypt the key! - ${String(error)}`);
   }

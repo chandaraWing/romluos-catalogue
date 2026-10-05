@@ -24,13 +24,13 @@ export const BankerFinancingModal: React.FC<BankerFinancingModalProps> = ({
   totalItemsCount = 0,
   onSubmitInquiry,
 }) => {
-  if (!isOpen) return null;
-
   const [selectedTenure, setSelectedTenure] = useState<number>(12);
   const [customerName, setCustomerName] = useState<string>('');
   const [customerPhone, setCustomerPhone] = useState<string>('');
   const [inquirySubmitting, setInquirySubmitting] = useState<boolean>(false);
   const [inquirySuccess, setInquirySuccess] = useState<boolean>(false);
+
+  if (!isOpen) return null;
 
   const loanBase = cartAmount > 0 ? cartAmount : 1299;
   const estimatedMonthly = loanBase / selectedTenure;

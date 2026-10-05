@@ -88,26 +88,6 @@ export const BankerCartView: React.FC<BankerCartViewProps> = ({
     return null;
   }, [propItemIds, searchParams]);
 
-  if (
-    !isPublicCheckout &&
-    user &&
-    user.role !== Role.DISTRICT_BANKER &&
-    user.role !== Role.SUPER_ADMIN &&
-    user.role !== Role.SYSTEM_ADMIN
-  ) {
-    return (
-      <div className="p-12 text-center rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4">
-        <div className="w-16 h-16 rounded-2xl bg-rose-500/10 text-rose-500 border border-rose-500/20 flex items-center justify-center mx-auto">
-          <ShieldAlert className="w-8 h-8" />
-        </div>
-        <h2 className="text-xl font-bold text-slate-900 dark:text-white">Access Restricted</h2>
-        <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
-          You do not have clearance to access the District Banker Financing Cart. This portal is restricted to accredited District Bankers and Financial Administrators.
-        </p>
-      </div>
-    );
-  }
-
   const {
     items: allCartItems,
     removeItem,
@@ -383,6 +363,26 @@ export const BankerCartView: React.FC<BankerCartViewProps> = ({
   const defaultBackUrl = isPublicCheckout ? '/' : '/';
   const defaultBackLabel = isPublicCheckout ? 'Back to Catalog' : 'Back to Device Catalog';
 
+  if (
+    !isPublicCheckout &&
+    user &&
+    user.role !== Role.DISTRICT_BANKER &&
+    user.role !== Role.SUPER_ADMIN &&
+    user.role !== Role.SYSTEM_ADMIN
+  ) {
+    return (
+      <div className="p-12 text-center rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4">
+        <div className="w-16 h-16 rounded-2xl bg-rose-500/10 text-rose-500 border border-rose-500/20 flex items-center justify-center mx-auto">
+          <ShieldAlert className="w-8 h-8" />
+        </div>
+        <h2 className="text-xl font-bold text-slate-900 dark:text-white">Access Restricted</h2>
+        <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
+          You do not have clearance to access the District Banker Financing Cart. This portal is restricted to accredited District Bankers and Financial Administrators.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -419,7 +419,7 @@ export const BankerCartView: React.FC<BankerCartViewProps> = ({
                   Checkout Initialized!
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  Your order draft is ready and stock is reserved. If your browser didn't automatically open the new tab, click below:
+                  Your order draft is ready and stock is reserved. If your browser didn&apos;t automatically open the new tab, click below:
                 </p>
               </div>
               <div className="pt-2 flex flex-col sm:flex-row gap-3 justify-center">
