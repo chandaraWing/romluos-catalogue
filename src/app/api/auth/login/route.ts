@@ -15,13 +15,10 @@ const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://qa.wingmall.com';
 const TOKEN_ENDPOINT = `${BASE_URL}/identity/v1/auth/token`;
 
 const CONSUMER_CLIENT_ID =
-  process.env.NEXT_PUBLIC_CONSUMER_CLIENT_ID ||
-  process.env.NEXT_PUBLIC_CUNSUMER_CLIENT_ID ||
-  'mv0z8ldFzKat_pr833oMVha3QXIa';
+  process.env.CONSUMER_CLIENT_ID || 'mv0z8ldFzKat_pr833oMVha3QXIa';
 
 const DISTRICT_BANKER_CLIENT_ID =
-  process.env.NEXT_PUBLIC_DISTRICT_BANKER_CLIENT_ID ||
-  'ISWiHRYMXeXyZIwgXSjTzglYn0Aa';
+  process.env.DISTRICT_BANKER_CLIENT_ID || 'ISWiHRYMXeXyZIwgXSjTzglYn0Aa';
 
 const formatCambodiaPhone = (phone: string): string => {
   let cleaned = phone.replace(/[\s\-\(\)\.]/g, '');

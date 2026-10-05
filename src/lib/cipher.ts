@@ -64,16 +64,15 @@ export const aesDecrypt = (value: string) => {
 export const getPublicKey = (role?: 'consumer' | 'district_banker') => {
   let rawKey = '';
   if (role === 'consumer') {
-    rawKey = process.env.NEXT_PUBLIC_CONSUMER_RSA_PUBLIC_KEY || '';
+    rawKey = process.env.CONSUMER_RSA_PUBLIC_KEY || '';
   } else if (role === 'district_banker') {
-    rawKey = process.env.NEXT_PUBLIC_DISTRICT_BANKER_RSA_PUBLIC_KEY || '';
+    rawKey = process.env.DISTRICT_BANKER_RSA_PUBLIC_KEY || '';
   }
 
   if (!rawKey) {
     rawKey =
-      process.env.NEXT_PUBLIC_RSA_PUBLIC_KEY ||
-      process.env.NEXT_PUBLIC_CONSUMER_RSA_PUBLIC_KEY ||
-      process.env.NEXT_PUBLIC_DISTRICT_BANKER_RSA_PUBLIC_KEY ||
+      process.env.CONSUMER_RSA_PUBLIC_KEY ||
+      process.env.DISTRICT_BANKER_RSA_PUBLIC_KEY ||
       '';
   }
 
@@ -126,10 +125,7 @@ export const rsaEncrypt = ({
 };
 
 export const getEncryptedConsumerClientSecret = () => {
-  const clientSecret =
-    process.env.NEXT_PUBLIC_CONSUMER_CLIENT_SECRET ||
-    process.env.NEXT_PUBLIC_CUNSUMER_CLIENT_SECRET ||
-    '';
+  const clientSecret = process.env.CONSUMER_CLIENT_SECRET || '';
   if (!clientSecret) {
     return '';
   }
@@ -137,7 +133,7 @@ export const getEncryptedConsumerClientSecret = () => {
 };
 
 export const getEncryptedDistrictBankerClientSecret = () => {
-  const clientSecret = process.env.NEXT_PUBLIC_DISTRICT_BANKER_CLIENT_SECRET ?? '';
+  const clientSecret = process.env.DISTRICT_BANKER_CLIENT_SECRET || '';
   if (!clientSecret) {
     return '';
   }
