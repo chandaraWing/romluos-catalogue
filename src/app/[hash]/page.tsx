@@ -23,7 +23,7 @@ import { BrandItem, CategoryItem, ProductItem, Role, Status } from '@/types';
 import { ArrowRight, Filter, Package, RotateCcw, X } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { toast } from 'sonner';
 
 function BankerCatalogContent({ hash }: { hash: string }) {
@@ -51,9 +51,15 @@ function BankerCatalogContent({ hash }: { hash: string }) {
   const [activeFilterTag, setActiveFilterTag] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>(searchParams.get('sort') || 'MOST_POPULAR');
 
-  // Pagination
+  // Pagination & API Fetching States
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const itemsPerPage = 9;
+  const [loadingProducts, setLoadingProducts] = useState<boolean>(false);
+  const [paginationInfo, setPaginationInfo] = useState<{ page: number; pages: number; records: number }>({
+    page: 1,
+    pages: 1,
+    records: 0,
+  });
+  const itemsPerPage = 36;
 
   // Modals & Drawers
   const [mobileFilterOpen, setMobileFilterOpen] = useState<boolean>(false);
@@ -72,7 +78,7 @@ function BankerCatalogContent({ hash }: { hash: string }) {
         id: user.branchId,
         name: user.branchName,
         code: `BR-${user.branchId}`,
-        companyId: user.companyId || '47860',
+        companyId: user.companyId || '',
       };
     }
     return null;
@@ -92,7 +98,80 @@ function BankerCatalogContent({ hash }: { hash: string }) {
   const checkoutAmount = checkoutItems.reduce((acc, item) => acc + Number(item.unitPrice) * item.quantity, 0);
   const checkoutItemsCount = checkoutItems.reduce((acc, item) => acc + item.quantity, 0);
 
-  // 1. Unified initial load: Parallelize catalog, categories, and products on mount
+  // Function to load a specific page of products directly from API
+  const loadProductsPage = useCallback(
+    async (pageToFetch: number) => {
+      const companyId = partnerProfile?.default_company?.id || user?.companyId;
+      const branchId = selectedBranch?.id || user?.branchId || partnerProfile?.default_company?.default_branch?.id;
+
+      if (!companyId) return;
+
+      let resolvedProductTypeId: string | undefined = undefined;
+      if (selectedCategory && selectedCategory !== 'ALL') {
+        const foundCat = categories.find(
+          (c) =>
+            String(c.id).toLowerCase() === selectedCategory.toLowerCase() ||
+            (c.code && c.code.toLowerCase() === selectedCategory.toLowerCase()) ||
+            (c.name && c.name.toLowerCase() === selectedCategory.toLowerCase())
+        );
+        resolvedProductTypeId = foundCat ? String(foundCat.id) : selectedCategory;
+      }
+
+      setLoadingProducts(true);
+      try {
+        const res = await fetchProducts({
+          businessId: companyId,
+          branchId: branchId,
+          page: pageToFetch,
+          rpp: itemsPerPage,
+          productTypeIds: resolvedProductTypeId,
+          keyword: searchQuery.trim() || undefined,
+          sort: sortBy,
+        });
+
+        if (res && res.length > 0) {
+          setProducts(res);
+          const maxP = Math.max(
+            ...res.map((p: any) => Number(p.currentPrice || p.basePrice || 0))
+          );
+          const roundedMax = Math.ceil((maxP || 1000) / 100) * 100;
+          setMaxPriceLimit(roundedMax > 500 ? roundedMax : 3500);
+          setPriceRange((prev) => (prev[1] === 3500 ? [0, roundedMax > 500 ? roundedMax : 3500] : prev));
+        } else {
+          setProducts([]);
+        }
+
+        if (res.pagination) {
+          setPaginationInfo(res.pagination);
+        } else {
+          setPaginationInfo({
+            page: pageToFetch,
+            pages: Math.max(1, Math.ceil((res.length || 0) / itemsPerPage)),
+            records: res.length || 0,
+          });
+        }
+      } catch (err) {
+        console.warn('Failed to load products page from API:', err);
+      } finally {
+        setLoadingProducts(false);
+      }
+    },
+    [
+      partnerProfile?.default_company?.id,
+      partnerProfile?.default_company?.default_branch?.id,
+      user?.companyId,
+      user?.branchId,
+      selectedBranch?.id,
+      selectedCategory,
+      categories,
+      searchQuery,
+      sortBy,
+      fetchProducts,
+      itemsPerPage,
+    ]
+  );
+
+  // 1. Unified initial load: Parallelize catalog and categories on mount
   useEffect(() => {
     let isMounted = true;
     async function initCatalogData() {
@@ -100,14 +179,23 @@ function BankerCatalogContent({ hash }: { hash: string }) {
         setLoading(true);
         setError(null);
 
-        const companyId = partnerProfile?.default_company?.id || user?.companyId || '47860';
-        const branchId = user?.branchId || partnerProfile?.default_company?.default_branch?.id || '47861';
+        const companyId = partnerProfile?.default_company?.id || user?.companyId;
+        const branchId = user?.branchId || partnerProfile?.default_company?.default_branch?.id;
 
-        // Fire all initial requests concurrently
+        // Fire initial requests concurrently
         const [catalogRes, catList, prodList] = await Promise.all([
           api.get<any>(`/api/banker-links/public/${hash}`, { cacheTtlMs: 60000 }).catch(() => null),
-          fetchCategories(companyId).catch(() => []),
-          fetchProducts({ businessId: companyId, branchId, sort: sortBy }).catch(() => []),
+          companyId ? fetchCategories(companyId).catch(() => []) : Promise.resolve([]),
+          companyId
+            ? fetchProducts({
+                businessId: companyId,
+                branchId,
+                page: 1,
+                rpp: itemsPerPage,
+                keyword: searchQuery.trim() || undefined,
+                sort: sortBy,
+              }).catch(() => [] as any)
+            : Promise.resolve([] as any),
         ]);
 
         if (!isMounted) return;
@@ -119,11 +207,14 @@ function BankerCatalogContent({ hash }: { hash: string }) {
         if (prodList && prodList.length > 0) {
           setProducts(prodList);
           const maxP = Math.max(
-            ...prodList.map((p) => Number(p.currentPrice || p.basePrice || 0))
+            ...prodList.map((p: any) => Number(p.currentPrice || p.basePrice || 0))
           );
           const roundedMax = Math.ceil((maxP || 1000) / 100) * 100;
           setMaxPriceLimit(roundedMax > 500 ? roundedMax : 3500);
           setPriceRange([0, roundedMax > 500 ? roundedMax : 3500]);
+          if (prodList.pagination) {
+            setPaginationInfo(prodList.pagination);
+          }
         }
 
         if (catalogRes && catalogRes.result !== false && (catalogRes.products || catalogRes.categories)) {
@@ -137,25 +228,25 @@ function BankerCatalogContent({ hash }: { hash: string }) {
           if (catalogRes.brands?.length > 0) {
             setBrands(catalogRes.brands);
           }
-        } else {
+        } else if (user) {
           const resolvedCompany = {
-            id: user?.companyId || partnerProfile?.default_company?.id || '47860',
-            name: user?.companyName || 'Google Mini Store',
-            code: 'GM',
+            id: user?.companyId || partnerProfile?.default_company?.id || '',
+            name: user?.companyName || 'Partner Store',
+            code: 'PS',
             status: Status.ACTIVE,
           };
           const resolvedBranch = {
-            id: user?.branchId || partnerProfile?.default_company?.default_branch?.id || '47861',
+            id: user?.branchId || partnerProfile?.default_company?.default_branch?.id || '',
             companyId: resolvedCompany.id,
-            name: user?.branchName || 'Google Mini Aeon I',
-            code: 'BR-47861',
+            name: user?.branchName || 'Partner Branch',
+            code: `BR-${user?.branchId || '01'}`,
             status: Status.ACTIVE,
           };
           const resolvedBanker = {
             id: user?.id || 'banker-partner-01',
-            fullName: user ? `${user.firstName} ${user.lastName}` : 'Sundar Pichai',
-            email: user?.email || 'sundar@wingbank.com.kh',
-            phone: user?.phone || '+855 23 999 888',
+            fullName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Partner Banker',
+            email: user?.email || '',
+            phone: user?.phone || '',
             role: Role.DISTRICT_BANKER,
             companyId: resolvedCompany.id,
             companyName: resolvedCompany.name,
@@ -191,54 +282,14 @@ function BankerCatalogContent({ hash }: { hash: string }) {
     return () => {
       isMounted = false;
     };
-  }, [hash, fetchCategories, fetchProducts, user?.companyId, user?.branchId, partnerProfile?.default_company?.id, partnerProfile?.default_company?.default_branch?.id]);
+  }, [hash, fetchCategories, fetchProducts, user?.companyId, user?.branchId, partnerProfile?.default_company?.id, partnerProfile?.default_company?.default_branch?.id, user, partnerProfile, sortBy, searchQuery, itemsPerPage]);
 
-  // 2. Subsequent category / sort filter changes
+  // 2. Fetch page whenever currentPage, selectedCategory, sortBy, or searchQuery changes
   useEffect(() => {
-    // Only re-fetch if not default initial state
-    if (selectedCategory === 'ALL' && sortBy === 'MOST_POPULAR') return;
-
-    let isMounted = true;
-    async function loadFilteredProducts() {
-      const companyId = partnerProfile?.default_company?.id || user?.companyId || '47860';
-      const branchId = user?.branchId || partnerProfile?.default_company?.default_branch?.id || '47861';
-
-      let resolvedProductTypeId: string | undefined = undefined;
-      if (selectedCategory && selectedCategory !== 'ALL') {
-        const foundCat = categories.find(
-          (c) =>
-            String(c.id).toLowerCase() === selectedCategory.toLowerCase() ||
-            (c.code && c.code.toLowerCase() === selectedCategory.toLowerCase()) ||
-            (c.name && c.name.toLowerCase() === selectedCategory.toLowerCase())
-        );
-        resolvedProductTypeId = foundCat ? String(foundCat.id) : selectedCategory;
-      }
-
-      const fetchedProducts = await fetchProducts({
-        businessId: companyId,
-        branchId: branchId,
-        productTypeIds: resolvedProductTypeId,
-        sort: sortBy,
-      });
-
-      if (isMounted && fetchedProducts && fetchedProducts.length > 0) {
-        setProducts(fetchedProducts);
-      }
-    }
-
-    loadFilteredProducts();
-    return () => {
-      isMounted = false;
-    };
-  }, [
-    selectedCategory,
-    sortBy,
-    fetchProducts,
-    user?.companyId,
-    user?.branchId,
-    partnerProfile?.default_company?.id,
-    partnerProfile?.default_company?.default_branch?.id,
-  ]);
+    // Avoid double fetching on initial mount while root is loading
+    if (loading) return;
+    loadProductsPage(currentPage);
+  }, [currentPage, selectedCategory, sortBy, searchQuery, selectedBranch?.id, loadProductsPage, loading]);
 
   // Dynamic Brand Aggregation
   const companyBrands = useMemo<BrandFilterItem[]>(() => {
@@ -368,12 +419,12 @@ function BankerCatalogContent({ hash }: { hash: string }) {
       });
   }, [products, searchQuery, selectedCategory, selectedBrand, priceRange, activeFilterTag, sortBy]);
 
-  // Paginated Results
-  const totalPages = Math.ceil(filteredProducts.length / itemsPerPage) || 1;
-  const paginatedProducts = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage;
-    return filteredProducts.slice(start, start + itemsPerPage);
-  }, [filteredProducts, currentPage]);
+  // Paginated Results - direct from API page payload
+  const totalPages = Math.max(
+    1,
+    paginationInfo.pages || Math.ceil((paginationInfo.records || filteredProducts.length) / itemsPerPage)
+  );
+  const paginatedProducts = filteredProducts;
 
   const getCartCount = (productId: string) => {
     return cartItems
@@ -714,8 +765,24 @@ function BankerCatalogContent({ hash }: { hash: string }) {
               </div>
             </div>
 
-            {/* Product Cards Grid */}
-            {paginatedProducts.length === 0 ? (
+            {/* Product Cards Grid with Live Loading State */}
+            {loadingProducts ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6 animate-pulse">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="h-80 rounded-3xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800 flex flex-col p-4 justify-between"
+                  >
+                    <div className="w-full h-44 rounded-2xl bg-slate-200 dark:bg-slate-700/60" />
+                    <div className="space-y-2">
+                      <div className="h-4 w-3/4 rounded-md bg-slate-200 dark:bg-slate-700/60" />
+                      <div className="h-3 w-1/2 rounded-md bg-slate-200 dark:bg-slate-700/60" />
+                    </div>
+                    <div className="h-8 w-full rounded-xl bg-slate-200 dark:bg-slate-700/60" />
+                  </div>
+                ))}
+              </div>
+            ) : paginatedProducts.length === 0 ? (
               <div className="py-16 sm:py-20 text-center rounded-3xl bg-white dark:bg-[#111722] border border-slate-200/80 dark:border-slate-800/80 p-6 sm:p-8 space-y-4">
                 <Package className="w-12 h-12 text-slate-300 dark:text-slate-700 mx-auto" />
                 <div className="space-y-1">
@@ -754,26 +821,80 @@ function BankerCatalogContent({ hash }: { hash: string }) {
 
             {/* Pagination Controls */}
             {totalPages > 1 && (
-              <div className="flex items-center justify-center gap-2 pt-4 sm:pt-6">
-                <button
-                  type="button"
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className="px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 disabled:opacity-40 cursor-pointer"
-                >
-                  Previous
-                </button>
-                <span className="text-xs font-bold text-slate-500 px-2 sm:px-3">
-                  Page {currentPage} of {totalPages}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
-                  className="px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 disabled:opacity-40 cursor-pointer"
-                >
-                  Next
-                </button>
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-slate-100 dark:border-slate-800/80">
+                <div className="text-xs font-semibold text-slate-500">
+                  Showing page <strong className="text-slate-900 dark:text-white">{currentPage}</strong> of{' '}
+                  <strong className="text-slate-900 dark:text-white">{totalPages}</strong>
+                  {paginationInfo.records > 0 && ` (${paginationInfo.records} total products)`}
+                </div>
+
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (currentPage > 1 && !loadingProducts) {
+                        setCurrentPage((p) => p - 1);
+                        window.scrollTo({ top: 350, behavior: 'smooth' });
+                      }
+                    }}
+                    disabled={currentPage === 1 || loadingProducts}
+                    className="px-3.5 py-2 rounded-xl text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                  >
+                    Previous
+                  </button>
+
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter((pageNum) => {
+                      return (
+                        pageNum === 1 ||
+                        pageNum === totalPages ||
+                        Math.abs(pageNum - currentPage) <= 2
+                      );
+                    })
+                    .map((pageNum, idx, arr) => {
+                      const prevNum = arr[idx - 1];
+                      const hasGap = prevNum && pageNum - prevNum > 1;
+
+                      return (
+                        <React.Fragment key={pageNum}>
+                          {hasGap && (
+                            <span className="px-1 text-xs text-slate-400 font-bold">...</span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (pageNum !== currentPage && !loadingProducts) {
+                                setCurrentPage(pageNum);
+                                window.scrollTo({ top: 350, behavior: 'smooth' });
+                              }
+                            }}
+                            disabled={loadingProducts}
+                            className={`w-8 h-8 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center ${
+                              currentPage === pageNum
+                                ? 'bg-brand text-slate-950 shadow-md shadow-brand/30 ring-2 ring-brand/40'
+                                : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                            }`}
+                          >
+                            {pageNum}
+                          </button>
+                        </React.Fragment>
+                      );
+                    })}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (currentPage < totalPages && !loadingProducts) {
+                        setCurrentPage((p) => p + 1);
+                        window.scrollTo({ top: 350, behavior: 'smooth' });
+                      }
+                    }}
+                    disabled={currentPage === totalPages || loadingProducts}
+                    className="px-3.5 py-2 rounded-xl text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                  >
+                    Next
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -817,10 +938,11 @@ function BankerCatalogContent({ hash }: { hash: string }) {
         items={cartItems}
         totalAmount={totalAmount}
         totalItems={totalItems}
-        onCheckout={(branchId, itemIds) => {
+        onCheckout={(branchId, itemIds, orderId) => {
           const params = new URLSearchParams();
           if (branchId) params.set('branchId', branchId);
           if (itemIds && itemIds.length > 0) params.set('items', itemIds.join(','));
+          if (orderId) params.set('orderId', orderId);
           params.set('backUrl', `/${hash}`);
           router.push(`/checkout?${params.toString()}`);
         }}

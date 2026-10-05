@@ -9,12 +9,46 @@ class ApiClient {
   private inFlightRequests = new Map<string, Promise<any>>();
   private memoryCache = new Map<string, RequestCacheEntry>();
 
-  private getToken(): string | null {
+  private extractToken(raw: string | null): string | null {
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      const token =
+        parsed?.access_token ||
+        parsed?.body?.access_token ||
+        parsed?.data?.access_token ||
+        parsed?.token ||
+        parsed?.accessToken;
+      if (token) return String(token).trim();
+    } catch {
+      // raw token
+    }
+    return raw.trim();
+  }
+
+  private getToken(endpoint?: string): string | null {
     if (typeof window === 'undefined') return null;
+
+    // For consumer endpoints (categories, products, shopping), strictly prioritize consumer token
+    const isConsumerEndpoint =
+      endpoint?.includes('categories') ||
+      endpoint?.includes('products') ||
+      endpoint?.includes('marketplace');
+
+    if (isConsumerEndpoint) {
+      const consumerToken =
+        this.extractToken(localStorage.getItem('romlus_consumer_token')) ||
+        this.extractToken(localStorage.getItem('romlus_consumer_session')) ||
+        this.extractToken(localStorage.getItem('romlus_auth_token')) ||
+        this.extractToken(localStorage.getItem('romlus_district_banker_token'));
+      return consumerToken;
+    }
+
     return (
-      localStorage.getItem('romlus_auth_token') ||
-      localStorage.getItem('romlus_consumer_token') ||
-      localStorage.getItem('romlus_district_banker_token')
+      this.extractToken(localStorage.getItem('romlus_auth_token')) ||
+      this.extractToken(localStorage.getItem('romlus_district_banker_token')) ||
+      this.extractToken(localStorage.getItem('romlus_district_banker_session')) ||
+      this.extractToken(localStorage.getItem('romlus_consumer_token'))
     );
   }
 
@@ -24,15 +58,22 @@ class ApiClient {
   ): Promise<T> {
     const isGet = !options.method || options.method.toUpperCase() === 'GET';
     const cacheTtlMs = options.cacheTtlMs ?? (isGet ? 30000 : 0); // 30 seconds default client cache for GET
-    const token = this.getToken();
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...(options.headers as Record<string, string>),
     };
 
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+    let token = this.getToken(endpoint);
+
+    // Only set Authorization header if not already explicitly provided by caller
+    if (!headers['Authorization'] && !headers['authorization']) {
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+    } else {
+      const existingAuth = headers['Authorization'] || headers['authorization'];
+      token = existingAuth.startsWith('Bearer ') ? existingAuth.substring(7) : existingAuth;
     }
 
     const url = endpoint.startsWith('http')

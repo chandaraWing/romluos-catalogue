@@ -28,9 +28,8 @@ export const BankerProductCard: React.FC<BankerProductCardProps> = ({
   const displayPrice = Number(product.unitPrice || product.currentPrice || product.basePrice || 0);
 
   const prefetchProductDetail = useCallback(() => {
-    if (!product?.id) return;
-    const branchId = product.branchId || '47861';
-    api.get(`/api/products/${product.id}?branch_id=${branchId}&service_types=ST_SHOPPING`, {
+    if (!product?.id || !product?.branchId) return;
+    api.get(`/api/products/${product.id}?branch_id=${product.branchId}&service_types=ST_SHOPPING`, {
       cacheTtlMs: 60000,
     }).catch(() => {});
   }, [product?.id, product?.branchId]);

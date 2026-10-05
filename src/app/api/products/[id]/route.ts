@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { formatImageUrl, getPreferredLocaleName } from '@/lib/utils';
 import { serverCache } from '@/lib/server-cache';
+import {
+  logApiRequest,
+  logUpstreamRequest,
+  logApiResponse,
+  logApiError,
+} from '@/lib/server-logger';
 
 const SHOP_BASE_URL = process.env.NEXT_PUBLIC_SHOP_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'https://qa.wingmall.com';
 
@@ -8,15 +14,26 @@ export async function GET(
   req: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
+  const startTime = Date.now();
   try {
     const { id } = await context.params;
     const { searchParams } = new URL(req.url);
 
     const serviceTypes = searchParams.get('service_types') || 'ST_SHOPPING';
-    let branchId = searchParams.get('branch_id') || '47861';
+    const branchId = searchParams.get('branch_id');
 
-    if (!branchId || branchId.startsWith('ROM-') || branchId === 'undefined') {
-      branchId = '47861';
+    logApiRequest('GET', `/api/products/${id}`, {
+      productId: id,
+      branchId,
+      serviceTypes,
+    });
+
+    if (!branchId || branchId === 'undefined') {
+      logApiResponse(`/api/products/${id}`, 400, { result: false, result_message: 'branch_id is required' }, Date.now() - startTime);
+      return NextResponse.json(
+        { result: false, result_message: 'branch_id is required' },
+        { status: 400 }
+      );
     }
 
     const authHeader = req.headers.get('Authorization') || req.headers.get('authorization');
@@ -34,6 +51,11 @@ export async function GET(
     const cacheKey = `product_detail:${id}:${branchId}:${serviceTypes}`;
     const cachedResponse = serverCache.get<any>(cacheKey);
     if (cachedResponse) {
+      logApiResponse(`/api/products/${id}`, 200, {
+        source: 'SERVER_CACHE',
+        productId: id,
+        name: cachedResponse.body?.name || cachedResponse.body?.info_locales?.[0]?.name,
+      }, Date.now() - startTime);
       return NextResponse.json(cachedResponse, {
         headers: {
           'X-Cache': 'HIT',
@@ -57,6 +79,8 @@ export async function GET(
       headers['Authorization'] = `Bearer ${token.trim()}`;
     }
 
+    logUpstreamRequest('GET', targetUrl, headers);
+
     const remoteRes = await fetch(targetUrl, {
       method: 'GET',
       headers,
@@ -75,6 +99,12 @@ export async function GET(
 
       serverCache.set(cacheKey, responsePayload, 120);
 
+      logApiResponse(`/api/products/${id}`, 200, {
+        productId: id,
+        name: data.body?.name || data.body?.info_locales?.[0]?.name,
+        price: data.body?.price,
+      }, Date.now() - startTime);
+
       return NextResponse.json(responsePayload, {
         headers: {
           'X-Cache': 'MISS',
@@ -82,6 +112,8 @@ export async function GET(
         },
       });
     }
+
+    logApiResponse(`/api/products/${id}`, remoteRes.status || 400, data, Date.now() - startTime);
 
     return NextResponse.json(
       data || {
@@ -92,7 +124,7 @@ export async function GET(
       { status: remoteRes.status }
     );
   } catch (error: any) {
-    console.error('Error fetching consumer product detail:', error);
+    logApiError(`/api/products`, error);
     return NextResponse.json(
       { result: false, result_message: error?.message || 'Failed to fetch product detail' },
       { status: 500 }

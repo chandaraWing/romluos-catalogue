@@ -4,12 +4,14 @@ import { Toaster as Sonner } from 'sonner';
 
 type ToasterProps = React.ComponentProps<typeof Sonner>;
 
-const Toaster = ({ ...props }: ToasterProps) => {
+const Toaster = ({ duration = 2000, ...props }: ToasterProps) => {
   return (
     <Sonner
+      duration={duration}
       theme="light"
       className="toaster group"
       toastOptions={{
+        duration: 2000,
         classNames: {
           toast:
             'group toast group-[.toaster]:bg-slate-900 group-[.toaster]:text-slate-100 group-[.toaster]:border-slate-800 group-[.toaster]:shadow-lg',

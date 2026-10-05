@@ -4,6 +4,12 @@ import {
   getEncryptedDistrictBankerClientSecret,
   rsaEncrypt,
 } from '@/lib/cipher';
+import {
+  logApiRequest,
+  logUpstreamRequest,
+  logApiResponse,
+  logApiError,
+} from '@/lib/server-logger';
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://qa.wingmall.com';
 const TOKEN_ENDPOINT = `${BASE_URL}/identity/v1/auth/token`;
@@ -32,11 +38,19 @@ const formatCambodiaPhone = (phone: string): string => {
 };
 
 export async function POST(req: NextRequest) {
+  const startTime = Date.now();
   try {
     const body = await req.json();
     const { phone, pin, encryptedPin: propEncryptedPin } = body;
 
+    logApiRequest('POST', '/api/auth/login', {
+      phone,
+      hasPin: !!pin,
+      hasEncryptedPin: !!propEncryptedPin,
+    });
+
     if (!phone) {
+      logApiResponse('/api/auth/login', 400, { success: false, message: 'Phone number is required' }, Date.now() - startTime);
       return NextResponse.json(
         { success: false, message: 'Phone number is required' },
         { status: 400 }
@@ -45,18 +59,20 @@ export async function POST(req: NextRequest) {
 
     const formattedUsername = formatCambodiaPhone(phone);
 
-    // Compute encrypted pin if not provided directly
-    let consumerEncryptedPin = propEncryptedPin;
-    let districtBankerEncryptedPin = propEncryptedPin;
+    // Compute encrypted pin for both consumer and banker
+    let consumerEncryptedPin = '';
+    let districtBankerEncryptedPin = '';
 
-    if (!consumerEncryptedPin && pin) {
+    if (pin) {
       consumerEncryptedPin = rsaEncrypt({ value: pin, role: 'consumer' });
-    }
-    if (!districtBankerEncryptedPin && pin) {
       districtBankerEncryptedPin = rsaEncrypt({ value: pin, role: 'district_banker' });
+    } else if (propEncryptedPin) {
+      consumerEncryptedPin = propEncryptedPin;
+      districtBankerEncryptedPin = propEncryptedPin;
     }
 
     if (!consumerEncryptedPin && !districtBankerEncryptedPin) {
+      logApiResponse('/api/auth/login', 400, { success: false, message: '4-digit PIN is required' }, Date.now() - startTime);
       return NextResponse.json(
         { success: false, message: '4-digit PIN is required' },
         { status: 400 }
@@ -65,6 +81,13 @@ export async function POST(req: NextRequest) {
 
     const consumerSecret = getEncryptedConsumerClientSecret();
     const districtBankerSecret = getEncryptedDistrictBankerClientSecret();
+
+    logUpstreamRequest('POST', TOKEN_ENDPOINT, undefined, {
+      username: formattedUsername,
+      grant_type: 'PASSWORD',
+      consumer_client_id: CONSUMER_CLIENT_ID,
+      banker_client_id: DISTRICT_BANKER_CLIENT_ID,
+    });
 
     // 1. Prepare Consumer Auth Promise
     const consumerPromise = fetch(TOKEN_ENDPOINT, {
@@ -136,9 +159,18 @@ export async function POST(req: NextRequest) {
       const errorMessage =
         districtBankerRes.data?.message ||
         consumerRes.data?.message ||
+        districtBankerRes.data?.result_message ||
+        consumerRes.data?.result_message ||
         districtBankerRes.data?.error_description ||
         consumerRes.data?.error_description ||
         'Authentication failed. Please verify your phone number and 4-digit PIN.';
+
+      logApiResponse('/api/auth/login', 401, {
+        success: false,
+        error: errorMessage,
+        bankerStatus: districtBankerRes.status,
+        consumerStatus: consumerRes.status,
+      }, Date.now() - startTime);
 
       return NextResponse.json(
         {
@@ -151,7 +183,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    return NextResponse.json({
+    const responsePayload = {
       success: true,
       username: formattedUsername,
       consumer: {
@@ -164,9 +196,42 @@ export async function POST(req: NextRequest) {
         status: districtBankerRes.status,
         data: districtBankerRes.data,
       },
-    });
+    };
+
+    const bankerToken =
+      districtBankerRes.data?.access_token ||
+      districtBankerRes.data?.data?.access_token ||
+      districtBankerRes.data?.body?.access_token ||
+      districtBankerRes.data?.token;
+
+    const consumerToken =
+      consumerRes.data?.access_token ||
+      consumerRes.data?.data?.access_token ||
+      consumerRes.data?.body?.access_token ||
+      consumerRes.data?.token;
+
+    logApiResponse('/api/auth/login', 200, {
+      success: true,
+      username: formattedUsername,
+      banker: {
+        status: districtBankerRes.status,
+        ok: districtBankerRes.ok,
+        hasToken: !!bankerToken,
+        tokenPreview: bankerToken ? `${bankerToken.substring(0, 15)}...` : undefined,
+        raw: districtBankerRes.data,
+      },
+      consumer: {
+        status: consumerRes.status,
+        ok: consumerRes.ok,
+        hasToken: !!consumerToken,
+        tokenPreview: consumerToken ? `${consumerToken.substring(0, 15)}...` : undefined,
+        raw: consumerRes.data,
+      },
+    }, Date.now() - startTime);
+
+    return NextResponse.json(responsePayload);
   } catch (error: any) {
-    console.error('Login error:', error);
+    logApiError('/api/auth/login', error);
     return NextResponse.json(
       {
         success: false,

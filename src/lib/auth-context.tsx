@@ -61,8 +61,9 @@ interface AuthContextValue {
     rpp?: number;
     serviceTypes?: string;
     productTypeIds?: string;
+    keyword?: string;
     sort?: string;
-  }) => Promise<ProductItem[]>;
+  }) => Promise<ProductItem[] & { pagination?: { page: number; pages: number; records: number } }>;
   setSessionManually: (session: {
     user: UserContextType;
     consumerToken?: string;
@@ -116,8 +117,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchUserProfile = useCallback(
     async (tokenOverride?: string): Promise<PartnerUserProfile | null> => {
-      const token = tokenOverride || districtBankerToken;
-      if (!token) return null;
+      const token = tokenOverride || districtBankerToken || consumerToken;
+      console.log('[fetchUserProfile] Starting profile fetch with token:', token ? `${token.substring(0, 15)}...` : 'NULL');
+      if (!token) {
+        console.warn('[fetchUserProfile] No token found in state or parameters.');
+        return null;
+      }
 
       try {
         const res = await fetch('/api/user/profile', {
@@ -125,9 +130,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             Authorization: `Bearer ${token}`,
           },
         });
+        console.log('res===================', res);
 
-        if (!res.ok) return null;
+        if (!res.ok) {
+          const errData = await res.json().catch(() => null);
+          console.error('Failed to fetch partner profile:', res.status, errData);
+          return null;
+        }
+
         const json = await res.json();
+
+        console.log('jsonxxxxxxxxx', json)
         if (json.body) {
           setPartnerProfile(json.body);
           if (typeof window !== 'undefined') {
@@ -140,8 +153,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 id: json.normalized.id || prev?.id || `usr_${Date.now()}`,
                 phone: json.normalized.phone || prev?.phone || '',
                 email: json.normalized.email || prev?.email || '',
-                firstName: json.normalized.firstName || prev?.firstName || 'Sundar',
-                lastName: json.normalized.lastName || prev?.lastName || 'Pichai',
+                firstName: json.normalized.firstName || prev?.firstName || '',
+                lastName: json.normalized.lastName || prev?.lastName || '',
                 role: prev?.role || Role.DISTRICT_BANKER,
                 companyId: json.normalized.companyId || prev?.companyId,
                 companyName: json.normalized.companyName || prev?.companyName,
@@ -154,7 +167,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return json.body;
         }
       } catch (err) {
-        console.warn('Failed to fetch partner profile:', err);
+        console.error('Failed to fetch partner profile:', err);
       }
       return null;
     },
@@ -192,8 +205,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const businessId =
         businessIdOverride ||
         partnerProfile?.default_company?.id ||
-        user?.companyId ||
-        '47860';
+        user?.companyId;
+
+      if (!businessId || businessId === 'undefined') {
+        console.error('Failed to fetch categories: companyId / businessId is required');
+        return [];
+      }
 
       try {
         const headers: Record<string, string> = {};
@@ -201,10 +218,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           headers['Authorization'] = `Bearer ${activeConsumerToken}`;
         }
 
-        const data = await api.get<any>(
-          `/api/categories?business_id=${businessId}&service_type=ST_SHOPPING&rpp=1000`,
-          { headers, cacheTtlMs: 120000 }
-        );
+        let url = `/api/categories?business_id=${businessId}&service_type=ST_SHOPPING&rpp=1000`;
+        if (activeConsumerToken) {
+          url += `&access_token=${encodeURIComponent(activeConsumerToken)}`;
+        }
+
+        const data = await api.get<any>(url, { headers, cacheTtlMs: 120000 });
         return data.categories || [];
       } catch (err) {
         console.warn('Failed to fetch consumer categories:', err);
@@ -216,6 +235,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchBranches = useCallback(
     async (companyId: string): Promise<BranchItem[]> => {
+      if (!companyId || companyId === 'undefined') {
+        console.error('Failed to fetch branches: companyId is required');
+        return [];
+      }
+
       let activeToken = districtBankerToken;
 
       if (!activeToken && typeof window !== 'undefined') {
@@ -263,8 +287,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       rpp?: number;
       serviceTypes?: string;
       productTypeIds?: string;
+      keyword?: string;
       sort?: string;
-    }): Promise<ProductItem[]> => {
+    }): Promise<ProductItem[] & { pagination?: { page: number; pages: number; records: number } }> => {
       let activeConsumerToken = consumerToken;
 
       if (!activeConsumerToken && typeof window !== 'undefined') {
@@ -294,19 +319,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const businessId =
         params?.businessId ||
         partnerProfile?.default_company?.id ||
-        user?.companyId ||
-        '47860';
+        user?.companyId;
 
       const branchId =
         params?.branchId ||
         user?.branchId ||
-        partnerProfile?.default_company?.default_branch?.id ||
-        '47861';
+        partnerProfile?.default_company?.default_branch?.id;
+
+      if (!businessId || businessId === 'undefined') {
+        console.error('Failed to fetch products: businessId / companyId is required');
+        const emptyList: any = [];
+        emptyList.pagination = { page: 1, pages: 1, records: 0 };
+        return emptyList;
+      }
 
       const page = params?.page || 1;
       const rpp = params?.rpp || 36;
       const serviceTypes = params?.serviceTypes || 'ST_SHOPPING';
       const productTypeIds = params?.productTypeIds;
+      const keyword = params?.keyword;
       const sort = params?.sort;
 
       try {
@@ -315,19 +346,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           headers['Authorization'] = `Bearer ${activeConsumerToken}`;
         }
 
-        let url = `/api/products?page=${page}&rpp=${rpp}&service_types=${serviceTypes}&business_ids=${businessId}&branch_ids=${branchId}`;
+        let url = `/api/products?page=${page}&rpp=${rpp}&service_types=${serviceTypes}&business_ids=${businessId}`;
+        if (branchId && branchId !== 'undefined') {
+          url += `&branch_ids=${branchId}`;
+        }
         if (productTypeIds && productTypeIds !== 'ALL') {
           url += `&product_type_ids=${encodeURIComponent(productTypeIds)}`;
+        }
+        if (keyword && keyword.trim()) {
+          url += `&keyword=${encodeURIComponent(keyword.trim())}`;
         }
         if (sort) {
           url += `&sort=${encodeURIComponent(sort)}`;
         }
+        if (activeConsumerToken) {
+          url += `&access_token=${encodeURIComponent(activeConsumerToken)}`;
+        }
 
-        const data = await api.get<any>(url, { headers, cacheTtlMs: 45000 });
-        return data.products || [];
+        const data = await api.get<any>(url, { headers, cacheTtlMs: 30000 });
+        const list: any = data.products || [];
+        list.pagination = data.pagination || {
+          page: Number(page),
+          pages: Math.max(1, Math.ceil((list.length || 0) / rpp)),
+          records: list.length || 0,
+        };
+        return list;
       } catch (err) {
         console.warn('Failed to fetch consumer products:', err);
-        return [];
+        const emptyList: any = [];
+        emptyList.pagination = { page: Number(page), pages: 1, records: 0 };
+        return emptyList;
       }
     },
     [consumerToken, partnerProfile, user]
@@ -380,30 +428,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             id: parsed?.id || 'usr_partner',
             phone: parsed?.phone_number || '',
             email: parsed?.email || '',
-            firstName: parsed?.first_name || 'Sundar',
-            lastName: parsed?.last_name || 'Pichai',
+            firstName: parsed?.first_name || '',
+            lastName: parsed?.last_name || '',
             role: savedDistrictBankerToken ? Role.DISTRICT_BANKER : Role.CONSUMER,
-            companyId: parsed?.default_company?.id || '47860',
-            companyName: cName || 'Google Mini Store',
-            branchId: parsed?.default_company?.default_branch?.id || '47861',
-            branchName: bName || 'Google Mini Aeon I',
+            companyId: parsed?.default_company?.id,
+            companyName: cName,
+            branchId: parsed?.default_company?.default_branch?.id,
+            branchName: bName,
           });
         } catch {
           // ignore error
         }
-      } else if (savedDistrictBankerToken || savedConsumerToken) {
-        setUser({
-          id: 'usr_partner',
-          phone: '',
-          email: 'sundar@wingbank.com.kh',
-          firstName: 'Sundar',
-          lastName: 'Pichai',
-          role: savedDistrictBankerToken ? Role.DISTRICT_BANKER : Role.CONSUMER,
-          companyId: '47860',
-          companyName: 'Google Mini Store',
-          branchId: '47861',
-          branchName: 'Google Mini Aeon I',
-        });
+      } else if (savedDistrictBankerToken) {
+        fetchUserProfile(savedDistrictBankerToken).catch(() => null);
       }
 
       if (savedRole && Object.values(Role).includes(savedRole)) {
@@ -418,7 +455,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fetchUserProfile]);
 
   const switchRole = useCallback((role: Role) => {
     setActiveRole(role);
@@ -502,14 +539,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const cToken =
           consumerPayload.access_token ||
           consumerPayload.data?.access_token ||
+          consumerPayload.body?.access_token ||
           consumerPayload.token ||
+          consumerPayload.data?.token ||
+          consumerPayload.body?.token ||
           null;
 
         const bToken =
           bankerPayload.access_token ||
           bankerPayload.data?.access_token ||
+          bankerPayload.body?.access_token ||
           bankerPayload.token ||
+          bankerPayload.data?.token ||
+          bankerPayload.body?.token ||
           null;
+
+        console.log('[AuthContext] Login response payload:', json);
+        console.log('[AuthContext] Extracted Tokens -> bankerToken:', bToken, 'consumerToken:', cToken);
 
         // Parse user identity info from fetched partner profile or fallback
         const bankerUser = bankerPayload.user || bankerPayload.data?.user || {};
@@ -522,14 +568,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             profNormalized?.email ||
             bankerUser.email ||
             consumerUser.email ||
-            `${(json.username || phone).replace(/[^0-9]/g, '')}@romlus.bank`,
-          firstName: profNormalized?.firstName || bankerUser.firstName || consumerUser.firstName || 'Sundar',
-          lastName: profNormalized?.lastName || bankerUser.lastName || consumerUser.lastName || 'Pichai',
+            '',
+          firstName: profNormalized?.firstName || bankerUser.firstName || consumerUser.firstName || '',
+          lastName: profNormalized?.lastName || bankerUser.lastName || consumerUser.lastName || '',
           role: bToken ? Role.DISTRICT_BANKER : Role.CONSUMER,
-          companyId: profNormalized?.companyId || bankerUser.companyId || '47860',
-          companyName: profNormalized?.companyName || bankerUser.companyName || 'Google Mini Store',
-          branchId: profNormalized?.branchId || bankerUser.branchId || '47861',
-          branchName: profNormalized?.branchName || bankerUser.branchName || 'Google Mini Aeon I',
+          companyId: profNormalized?.companyId || bankerUser.companyId,
+          companyName: profNormalized?.companyName || bankerUser.companyName,
+          branchId: profNormalized?.branchId || bankerUser.branchId,
+          branchName: profNormalized?.branchName || bankerUser.branchName,
         };
 
         setUser(parsedUser);
@@ -558,6 +604,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           localStorage.setItem(STORAGE_KEYS.ACTIVE_ROLE, primaryRole);
         }
 
+        // Automatically fetch live profile when a token is available
+        const activeToken = bToken || cToken;
+        if (activeToken) {
+          try {
+            console.log('[AuthContext] Triggering fetchUserProfile with token:', activeToken.substring(0, 15) + '...');
+            await fetchUserProfile(activeToken);
+          } catch (profileErr) {
+            console.error('Failed to load profile on login:', profileErr);
+          }
+        } else {
+          console.warn('[AuthContext] Neither bankerToken nor consumerToken was found in login response.');
+        }
+
         setLoading(false);
         return {
           success: true,
@@ -576,7 +635,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
       }
     },
-    []
+    [fetchUserProfile]
   );
 
   const setSessionManually = useCallback(

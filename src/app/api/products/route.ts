@@ -2,32 +2,49 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ProductItem, Status } from '@/types';
 import { getPreferredLocaleName, formatImageUrl } from '@/lib/utils';
 import { serverCache } from '@/lib/server-cache';
+import {
+  logApiRequest,
+  logUpstreamRequest,
+  logApiResponse,
+  logApiError,
+} from '@/lib/server-logger';
 
 const SHOP_BASE_URL = process.env.NEXT_PUBLIC_SHOP_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'https://qa.wingmall.com';
 
-
 export async function GET(req: NextRequest) {
+  const startTime = Date.now();
   try {
     const { searchParams } = new URL(req.url);
     const page = searchParams.get('page') || '1';
     const rpp = searchParams.get('rpp') || '36';
     const serviceTypes = searchParams.get('service_types') || 'ST_SHOPPING';
-    let businessIds = searchParams.get('business_ids') || searchParams.get('business_id') || searchParams.get('company_id') || '47860';
-    let branchIds = searchParams.get('branch_ids') || searchParams.get('branch_id') || '47861';
-
-    if (!businessIds || businessIds.startsWith('ROM-') || businessIds === 'undefined') {
-      businessIds = '47860';
-    }
-    if (!branchIds || branchIds.startsWith('ROM-') || branchIds === 'undefined') {
-      branchIds = '47861';
-    }
-
+    const businessIds = searchParams.get('business_ids') || searchParams.get('business_id') || searchParams.get('company_id');
+    const branchIds = searchParams.get('branch_ids') || searchParams.get('branch_id');
     const sort = searchParams.get('sort');
+    const keyword = searchParams.get('keyword') || searchParams.get('search') || searchParams.get('q');
     const productTypeIds =
       searchParams.get('product_type_ids') ||
       searchParams.get('product_type_id') ||
       searchParams.get('category_id') ||
       searchParams.get('categoryId');
+
+    logApiRequest('GET', '/api/products', {
+      businessIds,
+      branchIds,
+      categoryFilter: productTypeIds,
+      keyword,
+      sort,
+      page,
+      rpp,
+    });
+
+    if (!businessIds || businessIds === 'undefined') {
+      logApiResponse('/api/products', 400, { result: false, result_message: 'business_ids / company_id is required' }, Date.now() - startTime);
+      return NextResponse.json(
+        { result: false, result_message: 'business_ids / company_id is required', products: [] },
+        { status: 400 }
+      );
+    }
 
     const authHeader = req.headers.get('Authorization') || req.headers.get('authorization');
     let token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : authHeader;
@@ -41,7 +58,7 @@ export async function GET(req: NextRequest) {
         null;
     }
 
-    const cacheKey = `products:${businessIds}:${branchIds}:${serviceTypes}:${page}:${rpp}:${productTypeIds || 'all'}:${sort || 'default'}`;
+    const cacheKey = `products:${businessIds}:${branchIds || 'all'}:${serviceTypes}:${page}:${rpp}:${productTypeIds || 'all'}:${sort || 'default'}:${keyword || 'none'}`;
     const cachedResponse = serverCache.get<any>(cacheKey);
     if (cachedResponse) {
       return NextResponse.json(cachedResponse, {
@@ -52,9 +69,15 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    let targetUrl = `${SHOP_BASE_URL}/marketplace/v1/consumer/products/search?page=${page}&rpp=${rpp}&service_types=${serviceTypes}&business_ids=${businessIds}&branch_ids=${branchIds}&is_add_recent_search=false`;
+    let targetUrl = `${SHOP_BASE_URL}/marketplace/v1/consumer/products/search?page=${page}&rpp=${rpp}&service_types=${serviceTypes}&business_ids=${businessIds}&is_add_recent_search=false`;
+    if (branchIds && branchIds !== 'undefined') {
+      targetUrl += `&branch_ids=${branchIds}`;
+    }
     if (productTypeIds && productTypeIds !== 'ALL' && productTypeIds !== 'undefined') {
       targetUrl += `&product_type_ids=${encodeURIComponent(productTypeIds)}`;
+    }
+    if (keyword && keyword.trim()) {
+      targetUrl += `&keyword=${encodeURIComponent(keyword.trim())}`;
     }
     if (sort) {
       targetUrl += `&sort=${encodeURIComponent(sort)}`;
@@ -69,6 +92,8 @@ export async function GET(req: NextRequest) {
     if (token) {
       headers['authorization'] = `Bearer ${token}`;
     }
+
+    logUpstreamRequest('GET', targetUrl, headers);
 
     const remoteRes = await fetch(targetUrl, {
       method: 'GET',
@@ -198,6 +223,12 @@ export async function GET(req: NextRequest) {
 
       serverCache.set(cacheKey, responsePayload, 60);
 
+      logApiResponse('/api/products', 200, {
+        productCount: mappedProducts.length,
+        totalRecords: data.body.records,
+        sample: mappedProducts.slice(0, 2).map((p) => ({ id: p.id, name: p.name })),
+      }, Date.now() - startTime);
+
       return NextResponse.json(responsePayload, {
         headers: {
           'X-Cache': 'MISS',
@@ -206,15 +237,17 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    logApiResponse('/api/products', remoteRes.status || 400, data, Date.now() - startTime);
+
     return NextResponse.json({
       result: false,
-      result_code: data?.code || '400',
+      result_code: data?.code || String(remoteRes.status),
       result_message: data?.message || 'Failed to fetch products',
       products: [],
       error_detail: data,
-    });
+    }, { status: remoteRes.status || 400 });
   } catch (error: any) {
-    console.error('Error fetching consumer products search:', error);
+    logApiError('/api/products', error);
     return NextResponse.json(
       { result: false, result_message: error?.message || 'Failed to fetch products' },
       { status: 500 }

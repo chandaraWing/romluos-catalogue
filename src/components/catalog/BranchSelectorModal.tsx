@@ -41,16 +41,11 @@ export const BranchSelector: React.FC<BranchSelectorProps> = ({
     setMounted(true);
   }, []);
 
-  const rawCompanyId =
+  const companyId =
     String(company?.id || '') ||
     partnerProfile?.default_company?.id ||
     user?.companyId ||
-    '47860';
-
-  const companyId =
-    !rawCompanyId || rawCompanyId.startsWith('ROM-') || rawCompanyId === 'undefined'
-      ? '47860'
-      : rawCompanyId;
+    '';
 
   // Fetch branches for company using District Banker token
   useEffect(() => {
@@ -80,18 +75,18 @@ export const BranchSelector: React.FC<BranchSelectorProps> = ({
   const activeBranchId =
     user?.branchId ||
     partnerProfile?.default_company?.default_branch?.id ||
-    String(currentBranch?.id || '47861');
+    String(currentBranch?.id || '');
 
   const selectedBranchName =
     user?.branchName ||
     currentBranch?.name ||
     branches.find((b) => String(b.id) === String(activeBranchId))?.name ||
-    'Google Mini Aeon I';
+    'Select Branch';
 
   const selectedBranchCode =
     currentBranch?.code ||
     branches.find((b) => String(b.id) === String(activeBranchId))?.code ||
-    'AEON-01';
+    '';
 
   const handleSelect = (b: BranchItem) => {
     if (switchBranch) {

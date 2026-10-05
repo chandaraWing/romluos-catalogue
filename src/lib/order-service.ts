@@ -29,17 +29,19 @@ export interface ShoppingOrderGroup {
   subtotal: number;
   unavailable_option: string;
   delivery: {
-    rider_note: string;
     delivery_option_id: string;
     address: string;
-    logo_path: string | null;
-    subtitle: string | null;
+    logo_path?: string | null;
+    title?: string | null;
+    subtitle?: string | null;
     courier_type: string;
     delivery_fee: number;
     latitude: number | null;
     longitude: number | null;
     delivery_address_id: string;
     scheduled_delivery_date: string | null;
+    rider_note?: string;
+    ordering_type?: string;
   };
   scheduled_delivery_date: string;
   items: ShoppingOrderItem[];
@@ -47,23 +49,25 @@ export interface ShoppingOrderGroup {
 
 export interface CreateShoppingOrderPayload {
   delivery: {
-    rider_note: string;
     delivery_option_id: string;
     address: string;
-    logo_path: string | null;
-    subtitle: string | null;
+    logo_path?: string | null;
+    title?: string | null;
+    subtitle?: string | null;
     courier_type: string;
     delivery_fee: number;
     latitude: number | null;
     longitude: number | null;
     delivery_address_id: string;
     scheduled_delivery_date: string | null;
+    rider_note?: string;
+    ordering_type?: string;
   };
-  payment: {
-    payment_card_id: string;
-    is_using_cod: boolean;
-    device_payment: string;
-    payment_method: string;
+  payment?: {
+    payment_card_id?: string;
+    is_using_cod?: boolean;
+    device_payment?: string;
+    payment_method?: string;
   };
   orders: ShoppingOrderGroup[];
 }
@@ -83,7 +87,7 @@ export function buildShoppingOrderPayload(
   const branchGroups = new Map<string, CartItem[]>();
 
   items.forEach((item) => {
-    const bId = item.branchId || options?.branchId || '47861';
+    const bId = item.branchId || options?.branchId || '';
     if (!branchGroups.has(bId)) {
       branchGroups.set(bId, []);
     }
@@ -95,16 +99,17 @@ export function buildShoppingOrderPayload(
       const orderItems: ShoppingOrderItem[] = groupItems.map((i) => {
         const unitPrice = Number(i.unitPrice || 0);
         const totalAmount = unitPrice * i.quantity;
-        const itemId = i.variantId || i.id || i.productId;
+        const variantId = i.variantId || i.productId;
+        const itemId = String(variantId);
 
         return {
           note: null,
           quantity: i.quantity,
-          item_id: String(itemId),
+          item_id: itemId,
           total_amount: totalAmount,
           product_id: String(i.productId),
           currency: i.currency || 'USD',
-          cart_item_id: i.id || `buy-now-item-${itemId}`,
+          cart_item_id: `buy-now-item-${itemId}`,
           unit_price: unitPrice,
           modifiers: [],
           promotion: null,
@@ -115,7 +120,7 @@ export function buildShoppingOrderPayload(
 
       return {
         service_type: 'ST_SHOPPING',
-        business_id: options?.companyId || '47860',
+        business_id: options?.companyId || '',
         branch_id: branchId,
         currency: 'USD',
         exchange_rate: 4000,
@@ -128,9 +133,9 @@ export function buildShoppingOrderPayload(
         subtotal: subtotal,
         unavailable_option: 'CANCEL_THE_ENTIRE_ORDER',
         delivery: {
-          rider_note: options?.riderNote || '',
+          rider_note: '',
           delivery_option_id: '',
-          address: options?.deliveryAddress || '',
+          address: '',
           logo_path: null,
           subtitle: null,
           courier_type: '',
@@ -148,9 +153,9 @@ export function buildShoppingOrderPayload(
 
   return {
     delivery: {
-      rider_note: options?.riderNote || '',
+      rider_note: '',
       delivery_option_id: '',
-      address: options?.deliveryAddress || '',
+      address: '',
       logo_path: null,
       subtitle: null,
       courier_type: '',
@@ -170,15 +175,150 @@ export function buildShoppingOrderPayload(
   };
 }
 
+export const DEFAULT_DEVICE_ID = 'Wm3_CSP1A.210812.016';
+
+export const DEFAULT_INITIAL_DELIVERY = {
+  rider_note: '',
+  delivery_option_id: '',
+  address: '',
+  logo_path: null,
+  subtitle: null,
+  courier_type: '',
+  delivery_fee: 0,
+  latitude: null,
+  longitude: null,
+  delivery_address_id: '',
+  scheduled_delivery_date: null,
+};
+
+export const DEFAULT_MOCK_DELIVERY = {
+  address: 'Wing Bank',
+  latitude: 11.541713,
+  longitude: 104.922465,
+  delivery_address_id: 'ADD-262750000475391',
+  delivery_fee: 0,
+  rider_note: '',
+  logo_path: null,
+  subtitle: null,
+  scheduled_delivery_date: null,
+  delivery_option_id: 'DOP-622749334039948',
+  courier_type: 'instant_delivery',
+};
+
+export const DEFAULT_MOCK_PAYMENT = {
+  payment_card_id: 'POP-262737310663101',
+  is_using_cod: false,
+  device_payment: '',
+  payment_method: 'RML',
+};
+
+export interface UpdateShoppingOrderPayload {
+  order_id: string;
+  delivery?: {
+    address?: string;
+    latitude?: number | null;
+    longitude?: number | null;
+    delivery_address_id?: string;
+    delivery_fee?: number;
+    rider_note?: string;
+    logo_path?: string | null;
+    subtitle?: string | null;
+    scheduled_delivery_date?: string | null;
+    delivery_option_id?: string;
+    courier_type?: string;
+  };
+  payment?: {
+    payment_card_id?: string;
+    is_using_cod?: boolean;
+    device_payment?: string;
+    payment_method?: string;
+  };
+}
+
 export async function createShoppingOrder(
   payload: CreateShoppingOrderPayload,
   token?: string
 ): Promise<any> {
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    'Content-Type': 'application/json; charset=utf-8',
+    'device-id': DEFAULT_DEVICE_ID,
   };
   if (token) {
     headers['Authorization'] = `Bearer ${token.trim()}`;
   }
   return api.post('/api/orders/shopping', payload, { headers });
 }
+
+export async function updateShoppingOrder(
+  orderId: string,
+  payload?: Partial<UpdateShoppingOrderPayload>,
+  token?: string
+): Promise<any> {
+  const finalPayload: UpdateShoppingOrderPayload = {
+    order_id: orderId,
+    delivery: {
+      ...DEFAULT_MOCK_DELIVERY,
+      ...(payload?.delivery || {}),
+    },
+    payment: {
+      ...DEFAULT_MOCK_PAYMENT,
+      ...(payload?.payment || {}),
+    },
+  };
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json; charset=utf-8',
+    'device-id': DEFAULT_DEVICE_ID,
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token.trim()}`;
+  }
+
+  return api.post(`/api/orders/shopping/${encodeURIComponent(orderId)}/update`, finalPayload, { headers });
+}
+
+export const DEFAULT_CHECKOUT_METADATA = {
+  metadata: {
+    delivery_option: {
+      delivery_fee: 0,
+      delivery_option_id: 'DOP-622749334039948',
+    },
+    payment_option: {
+      id: 'POP-262737310663101',
+      title: {
+        km: 'បង់រំលោះជាមួយ ធនាគារវីង',
+        en: 'Romluos by Wingbank',
+        zh: 'Wingbank 分期付款',
+      },
+      subtitle: {
+        km: 'បង់រំលោះងាយៗប្រចាំខែ',
+        en: 'Pay in easy monthly installments',
+        zh: '轻松每月分期付款',
+      },
+      logo_path: 'raw/partner/USR-24283000000000001/profile/RES-262730003487451.png',
+    },
+  },
+};
+
+export async function checkoutShoppingOrder(
+  orderId: string,
+  payload?: any,
+  token?: string
+): Promise<any> {
+  const finalPayload = payload || DEFAULT_CHECKOUT_METADATA;
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json; charset=utf-8',
+    'device-id': DEFAULT_DEVICE_ID,
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token.trim()}`;
+  }
+
+  return api.post(
+    `/api/orders/shopping/${encodeURIComponent(orderId)}/checkout`,
+    finalPayload,
+    { headers }
+  );
+}
+

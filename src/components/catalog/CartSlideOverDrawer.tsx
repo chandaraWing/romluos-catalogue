@@ -2,7 +2,9 @@
 
 import { Button } from '@/components/ui/button';
 import { CartItem, useCart } from '@/lib/cart-context';
-import { ArrowRight, Minus, Plus, ShoppingCart, Trash2, X, Zap } from 'lucide-react';
+import { useAuth } from '@/lib/auth-context';
+import { buildShoppingOrderPayload, createShoppingOrder } from '@/lib/order-service';
+import { ArrowRight, Loader2, Minus, Plus, ShoppingCart, Trash2, X, Zap } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
 
@@ -13,7 +15,7 @@ interface CartSlideOverDrawerProps {
   totalAmount: number;
   totalItems: number;
   onOpenFinancing?: (branchId: string, itemIds: string[]) => void;
-  onCheckout?: (branchId: string, itemIds: string[]) => void;
+  onCheckout?: (branchId: string, itemIds: string[], orderId?: string) => void;
   onRemoveItem?: (itemId: string) => void;
   checkoutUrl?: string;
 }
@@ -31,8 +33,10 @@ export const CartSlideOverDrawer: React.FC<CartSlideOverDrawerProps> = ({
 }) => {
   const router = useRouter();
   const { removeItem, updateQuantity } = useCart();
+  const { user, consumerToken } = useAuth();
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
+  const [creatingDraftOrder, setCreatingDraftOrder] = useState<boolean>(false);
 
   useEffect(() => {
     if (isOpen && items.length > 0) {
@@ -309,24 +313,68 @@ export const CartSlideOverDrawer: React.FC<CartSlideOverDrawerProps> = ({
                 type="button"
                 variant="outline"
                 size="lg"
-                onClick={() => {
-                  onClose();
-                  if (onCheckout) {
-                    onCheckout(selectedBranchId, Array.from(selectedItemIds));
-                  } else if (onOpenFinancing) {
-                    onOpenFinancing(selectedBranchId, Array.from(selectedItemIds));
-                  } else {
-                    const params = new URLSearchParams();
-                    if (selectedBranchId) params.set('branchId', selectedBranchId);
-                    if (selectedItemIds.size > 0) params.set('items', Array.from(selectedItemIds).join(','));
-                    router.push(`${checkoutUrl}?${params.toString()}`);
+                disabled={creatingDraftOrder}
+                onClick={async () => {
+                  setCreatingDraftOrder(true);
+                  try {
+                    const selectedItems = items.filter((i) =>
+                      (i.branchId || 'unknown') === selectedBranchId &&
+                      selectedItemIds.has(i.id || i.productId)
+                    );
+
+                    const shoppingPayload = buildShoppingOrderPayload(selectedItems, {
+                      branchId: selectedBranchId,
+                      companyId: user?.companyId,
+                    });
+
+                    let createdOrderId: string | undefined = undefined;
+                    try {
+                      const res = await createShoppingOrder(shoppingPayload, consumerToken || undefined);
+                      const draftOrder = Array.isArray(res?.body) ? res.body[0] : (res?.body || res?.data || res?.order_detail || res);
+                      createdOrderId =
+                        draftOrder?.order_id ||
+                        draftOrder?.order_number ||
+                        draftOrder?.id ||
+                        res?.order_id;
+
+                      if (typeof window !== 'undefined' && createdOrderId) {
+                        localStorage.setItem('romlus_active_draft_order_id', createdOrderId);
+                        localStorage.setItem('romlus_active_draft_order', JSON.stringify(draftOrder));
+                      }
+                    } catch (apiErr) {
+                      console.warn('API error creating draft order, fallback to local flow:', apiErr);
+                    }
+
+                    onClose();
+                    if (onCheckout) {
+                      onCheckout(selectedBranchId, Array.from(selectedItemIds), createdOrderId);
+                    } else if (onOpenFinancing) {
+                      onOpenFinancing(selectedBranchId, Array.from(selectedItemIds));
+                    } else {
+                      const params = new URLSearchParams();
+                      if (selectedBranchId) params.set('branchId', selectedBranchId);
+                      if (selectedItemIds.size > 0) params.set('items', Array.from(selectedItemIds).join(','));
+                      if (createdOrderId) params.set('orderId', createdOrderId);
+                      router.push(`${checkoutUrl}?${params.toString()}`);
+                    }
+                  } finally {
+                    setCreatingDraftOrder(false);
                   }
                 }}
                 className="w-full text-sm flex items-center justify-center gap-2 shadow-lg hover:shadow-brand/20 cursor-pointer border border-transparent [background:linear-gradient(#ffffff,#ffffff)_padding-box,linear-gradient(135deg,#A9CB37_0%,#0077FF_100%)_border-box] dark:[background:linear-gradient(#0f172a,#0f172a)_padding-box,linear-gradient(135deg,#A9CB37_0%,#0077FF_100%)_border-box] hover:shadow-lg hover:shadow-brand/20 transition-all group cursor-pointer"
               >
-                <Zap className="w-4 h-4 text-brand-600 dark:text-brand" />
-                <span className="font-bold bg-gradient-to-r from-brand-700 via-brand-600 to-brand-blue-600 dark:from-brand dark:via-brand-200 dark:to-brand-blue bg-clip-text text-transparent">Proceed to Checkout (${selectedTotal.toFixed(2)})</span>
-                <ArrowRight className="w-4 h-4 ml-1 text-brand-600 dark:text-brand" />
+                {creatingDraftOrder ? (
+                  <>
+                    <Loader2 className="w-4 h-4 text-brand-600 dark:text-brand animate-spin" />
+                    <span className="font-bold text-brand-600 dark:text-brand">Creating Draft Order...</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-4 h-4 text-brand-600 dark:text-brand" />
+                    <span className="font-bold bg-gradient-to-r from-brand-700 via-brand-600 to-brand-blue-600 dark:from-brand dark:via-brand-200 dark:to-brand-blue bg-clip-text text-transparent">Proceed to Checkout (${selectedTotal.toFixed(2)})</span>
+                    <ArrowRight className="w-4 h-4 ml-1 text-brand-600 dark:text-brand" />
+                  </>
+                )}
               </Button>
             </div>
           )}

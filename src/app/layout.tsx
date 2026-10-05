@@ -27,7 +27,7 @@ export default function RootLayout({
               <main className="min-h-screen bg-white dark:bg-[#070b14] text-[#111111] dark:text-slate-100 antialiased selection:bg-brand selection:text-slate-950 transition-colors duration-200">
                 {children}
               </main>
-              <Toaster position="top-right" richColors closeButton />
+              <Toaster position="top-right" duration={2000} richColors closeButton />
             </CartProvider>
           </AuthProvider>
         </ThemeProvider>

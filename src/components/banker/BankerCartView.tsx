@@ -1,34 +1,45 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { useCart } from '@/lib/cart-context';
+import {
+  buildShoppingOrderPayload,
+  checkoutShoppingOrder,
+  createShoppingOrder,
+  DEFAULT_CHECKOUT_METADATA,
+  DEFAULT_MOCK_DELIVERY,
+  DEFAULT_MOCK_PAYMENT,
+  updateShoppingOrder,
+} from '@/lib/order-service';
 import { formatCurrency } from '@/lib/utils';
-import { buildShoppingOrderPayload, createShoppingOrder } from '@/lib/order-service';
 import { Role } from '@/types';
 import {
   ArrowLeft,
   ArrowRight,
   Banknote,
   CheckCircle2,
-  Copy,
+  ExternalLink,
   Landmark,
+  Loader2,
   Lock,
+  MapPin,
   Minus,
   Package,
   Plus,
-  QrCode,
+  RefreshCw,
   ShieldAlert,
   ShieldCheck,
   ShoppingCart,
   Trash2,
+  Truck,
   User,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { QRCodeSVG } from 'qrcode.react';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 
 export interface BankerCartViewProps {
   isPublicCheckout?: boolean;
@@ -51,6 +62,22 @@ export const BankerCartView: React.FC<BankerCartViewProps> = ({
 }) => {
   const { user, consumerToken } = useAuth();
   const searchParams = useSearchParams();
+
+  // Active Draft Order from URL or LocalStorage
+  const urlOrderId = searchParams.get('orderId');
+  const [activeOrderId, setActiveOrderId] = useState<string | null>(urlOrderId);
+  const [isSyncingDraft, setIsSyncingDraft] = useState<boolean>(false);
+  const [draftSynced, setDraftSynced] = useState<boolean>(false);
+  const [draftOrderData, setDraftOrderData] = useState<any>(null);
+
+  useEffect(() => {
+    if (urlOrderId) {
+      setActiveOrderId(urlOrderId);
+    } else if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('romlus_active_draft_order_id');
+      if (stored) setActiveOrderId(stored);
+    }
+  }, [urlOrderId]);
 
   // Determine branch and items filters from props or URL search params
   const activeBranchId = propBranchId || searchParams.get('branchId') || null;
@@ -184,6 +211,43 @@ export const BankerCartView: React.FC<BankerCartViewProps> = ({
     };
   }, [targetBranchId, branchName, user?.id]);
 
+  // Automatic Draft Order Synchronization on Checkout Load
+  useEffect(() => {
+    if (!activeOrderId) return;
+    const orderIdToSync = String(activeOrderId);
+
+    let isMounted = true;
+    async function syncDraftOrder() {
+      setIsSyncingDraft(true);
+      try {
+        console.log('[BankerCartView] Automatically updating draft order with mock delivery:', orderIdToSync);
+        const updateRes = await updateShoppingOrder(
+          orderIdToSync,
+          {
+            order_id: orderIdToSync,
+            delivery: DEFAULT_MOCK_DELIVERY,
+            payment: DEFAULT_MOCK_PAYMENT,
+          },
+          consumerToken || undefined
+        );
+
+        if (isMounted) {
+          setDraftSynced(true);
+          setDraftOrderData(updateRes?.body || updateRes?.data || updateRes);
+        }
+      } catch (err) {
+        console.warn('Draft order auto-update notification:', err);
+      } finally {
+        if (isMounted) setIsSyncingDraft(false);
+      }
+    }
+
+    syncDraftOrder();
+    return () => {
+      isMounted = false;
+    };
+  }, [activeOrderId, consumerToken]);
+
   const selectedBanker = bankers.find((b) => b.id === selectedBankerId) || bankers[0];
 
   // Customer Form Fields
@@ -208,71 +272,112 @@ export const BankerCartView: React.FC<BankerCartViewProps> = ({
 
   // Request Submission State
   const [submitting, setSubmitting] = useState(false);
-  const [createdRequest, setCreatedRequest] = useState<any>(null);
-  const [copiedCode, setCopiedCode] = useState(false);
+  const [completedPaymentUrl, setCompletedPaymentUrl] = useState<string | null>(null);
 
   const handleSubmitFinancingRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (displayItems.length === 0) return;
+    setSubmitting(true);
+    setCompletedPaymentUrl(null);
 
-    const shoppingPayload = buildShoppingOrderPayload(displayItems, {
-      companyId: user?.companyId || '47860',
-      branchId: activeBranchId || user?.branchId || '47861',
-      paymentMethod: 'RML',
-      riderNote: notes,
-      deliveryAddress: customerName ? `${customerName} - ${customerPhone}` : undefined,
-    });
+    // Pre-open new tab synchronously on click to bypass browser popup blockers
+    const popupTab = typeof window !== 'undefined' ? window.open('about:blank', '_blank') : null;
 
     try {
-      const res = await createShoppingOrder(shoppingPayload, consumerToken || undefined);
-      const draftOrder = res?.body || res?.data || res?.order_detail || res;
-      const orderId =
-        draftOrder?.order_id ||
-        draftOrder?.order_number ||
-        draftOrder?.id ||
-        `ORD-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(100000 + Math.random() * 900000)}`;
+      let finalOrderId = activeOrderId;
 
-      setCreatedRequest({
-        ...draftOrder,
-        requestNumber: orderId,
-        customerRefId: customerRefId || `CUST-${orderId}`,
-        customerName,
-        totalAmount: sessionTotalAmount,
-        downPaymentAmount: sessionDownPaymentAmount,
-        status: 'ORDER_DRAFT_CREATED',
-        qr: {
-          code: `ROMLUS:ORDER:${orderId}`,
-        },
-      });
+      if (!finalOrderId) {
+        const shoppingPayload = buildShoppingOrderPayload(displayItems, {
+          companyId: user?.companyId || '',
+          branchId: activeBranchId || user?.branchId || '',
+          paymentMethod: 'RML',
+          riderNote: notes,
+          deliveryAddress: customerName ? `${customerName} - ${customerPhone}` : undefined,
+        });
+
+        const res = await createShoppingOrder(shoppingPayload, consumerToken || undefined);
+        const draftOrder = Array.isArray(res?.body) ? res.body[0] : (res?.body || res?.data || res?.order_detail || res);
+        finalOrderId =
+          draftOrder?.order_id ||
+          draftOrder?.order_number ||
+          draftOrder?.id ||
+          `ORD-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(100000 + Math.random() * 900000)}`;
+      }
+
+      // Update draft order with customer notes & mock delivery
+      if (finalOrderId) {
+        await updateShoppingOrder(
+          finalOrderId,
+          {
+            order_id: finalOrderId,
+            delivery: {
+              ...DEFAULT_MOCK_DELIVERY,
+              rider_note: notes,
+            },
+            payment: DEFAULT_MOCK_PAYMENT,
+          },
+          consumerToken || undefined
+        ).catch((uErr) => console.warn('Update on submit note:', uErr));
+      }
+
+      // Call checkout API
+      if (finalOrderId) {
+        try {
+          const checkoutRes = await checkoutShoppingOrder(
+            finalOrderId,
+            DEFAULT_CHECKOUT_METADATA,
+            consumerToken || undefined
+          );
+
+          const paymentRedirectWebUrl =
+            checkoutRes?.body?.payment_redirect_web_url ||
+            checkoutRes?.body?.payment_redirect_url ||
+            checkoutRes?.payment_redirect_web_url ||
+            checkoutRes?.payment_redirect_url ||
+            checkoutRes?.redirectUrl ||
+            null;
+
+          if (paymentRedirectWebUrl) {
+            setCompletedPaymentUrl(paymentRedirectWebUrl);
+            toast.success('Redirecting to Wing payment checkout...');
+
+            let tabOpened = false;
+            if (popupTab && !popupTab.closed) {
+              try {
+                popupTab.location.href = paymentRedirectWebUrl;
+                popupTab.focus();
+                tabOpened = true;
+              } catch (e) {
+                console.warn('Popup redirect warning:', e);
+              }
+            }
+
+            // If popup was blocked or failed, directly navigate the current page to the payment gateway
+            if (!tabOpened && typeof window !== 'undefined') {
+              window.location.href = paymentRedirectWebUrl;
+            }
+          } else {
+            if (popupTab && !popupTab.closed) popupTab.close();
+            toast.error(checkoutRes?.result_message || 'Payment checkout URL not received');
+          }
+        } catch (checkoutErr: any) {
+          if (popupTab && !popupTab.closed) popupTab.close();
+          console.warn('Checkout API request note:', checkoutErr);
+          toast.error('Failed to complete checkout process');
+        }
+      }
+
       displayItems.forEach((i) => removeItem(i.id || i.productId));
-    } catch (err) {
-      console.warn('Live shopping order creation, falling back to local draft request:', err);
-      // Fallback draft generation
-      const mockReqNumber = `REQ-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(100000 + Math.random() * 900000)}`;
-      const mockResult = {
-        id: 'req-uuid-' + Date.now(),
-        requestNumber: mockReqNumber,
-        customerRefId,
-        customerName,
-        totalAmount: sessionTotalAmount,
-        downPaymentAmount: sessionDownPaymentAmount,
-        status: 'QR_GENERATED',
-        expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
-        qr: {
-          code: `ROMLUS:FIN:${mockReqNumber}:DEMO-TOKEN`,
-        },
-      };
-      setCreatedRequest(mockResult);
-      displayItems.forEach((i) => removeItem(i.id || i.productId));
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('romlus_active_draft_order_id');
+      }
+    } catch (err: any) {
+      if (popupTab && !popupTab.closed) popupTab.close();
+      console.warn('Live shopping order flow error:', err);
+      toast.error(err?.message || 'Failed to process checkout');
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedCode(true);
-    setTimeout(() => setCopiedCode(false), 2000);
   };
 
   const defaultBackUrl = isPublicCheckout ? '/' : '/';
@@ -302,29 +407,113 @@ export const BankerCartView: React.FC<BankerCartViewProps> = ({
         </div>
       </div>
 
-      {displayItems.length === 0 && !createdRequest ? (
-        <div className="p-12 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center space-y-4 shadow-sm">
-          <div className="h-16 w-16 rounded-2xl bg-slate-100 dark:bg-slate-800/60 mx-auto flex items-center justify-center text-slate-400 dark:text-slate-500">
-            <ShoppingCart className="w-8 h-8" />
-          </div>
-          <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-            {isPublicCheckout ? 'Your Checkout Cart is Empty' : 'Your Financing Cart is Empty'}
-          </h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
-            Browse our electronics catalog to add smartphones, laptops, or accessories to your proposal.
-          </p>
-          <Link
-            href={backUrl || defaultBackUrl}
-            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-accent-gradient text-white font-bold text-xs shadow-lg shadow-brand/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
-          >
-            <span>Open Device Catalog</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
+      {displayItems.length === 0 ? (
+        <div className="p-8 sm:p-12 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center space-y-5 shadow-sm">
+          {completedPaymentUrl ? (
+            <div className="max-w-md mx-auto space-y-4">
+              <div className="h-16 w-16 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 mx-auto flex items-center justify-center font-black">
+                <CheckCircle2 className="w-8 h-8" />
+              </div>
+              <div>
+                <h3 className="text-xl font-extrabold text-slate-900 dark:text-white">
+                  Checkout Initialized!
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Your order draft is ready and stock is reserved. If your browser didn't automatically open the new tab, click below:
+                </p>
+              </div>
+              <div className="pt-2 flex flex-col sm:flex-row gap-3 justify-center">
+                <Button
+                  type="button"
+                  onClick={() => window.open(completedPaymentUrl, '_blank')}
+                  className="h-12 px-6 rounded-xl bg-accent-gradient text-white font-extrabold text-xs shadow-lg shadow-brand/25 flex items-center justify-center gap-2"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  <span>Open Wing Payment Checkout</span>
+                </Button>
+                <Link
+                  href={backUrl || defaultBackUrl}
+                  className="h-12 px-5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  <span>Back to Catalog</span>
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="h-16 w-16 rounded-2xl bg-slate-100 dark:bg-slate-800/60 mx-auto flex items-center justify-center text-slate-400 dark:text-slate-500">
+                <ShoppingCart className="w-8 h-8" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                {isPublicCheckout ? 'Your Checkout Cart is Empty' : 'Your Financing Cart is Empty'}
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
+                Browse our electronics catalog to add smartphones, laptops, or accessories to your proposal.
+              </p>
+              <Link
+                href={backUrl || defaultBackUrl}
+                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-accent-gradient text-white font-bold text-xs shadow-lg shadow-brand/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
+              >
+                <span>Open Device Catalog</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left Column: Cart Items List */}
           <div className="lg:col-span-2 space-y-6">
+            {/* Live Draft Order & Mock Delivery Status Banner */}
+            {activeOrderId && (
+              <div className="p-4 sm:p-5 rounded-3xl bg-white dark:bg-slate-900 border border-brand/40 shadow-sm space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Truck className="w-4 h-4 text-brand" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
+                      Draft Order Delivery & Payment (Instant Sync)
+                    </span>
+                  </div>
+                  {isSyncingDraft ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] text-brand font-semibold animate-pulse">
+                      <RefreshCw className="w-3 h-3 animate-spin" />
+                      Updating Delivery...
+                    </span>
+                  ) : draftSynced ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                      <CheckCircle2 className="w-3 h-3" />
+                      Order Synchronized
+                    </span>
+                  ) : null}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                  <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
+                    <div className="text-[10px] uppercase text-slate-400 font-semibold">Draft Order ID</div>
+                    <div className="font-mono font-bold text-brand mt-0.5 truncate">{activeOrderId}</div>
+                  </div>
+                  <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
+                    <div className="text-[10px] uppercase text-slate-400 font-semibold flex items-center gap-1">
+                      <MapPin className="w-3 h-3 text-brand" /> Delivery Address
+                    </div>
+                    <div className="font-semibold text-slate-800 dark:text-slate-200 mt-0.5 truncate">
+                      {DEFAULT_MOCK_DELIVERY.address}
+                    </div>
+                    <div className="text-[10px] text-slate-400">Instant Delivery ($0.00)</div>
+                  </div>
+                  <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
+                    <div className="text-[10px] uppercase text-slate-400 font-semibold">Payment Config</div>
+                    <div className="font-semibold text-slate-800 dark:text-slate-200 mt-0.5">
+                      {DEFAULT_MOCK_PAYMENT.payment_method}
+                    </div>
+                    <div className="text-[10px] text-slate-400 font-mono truncate">
+                      {DEFAULT_MOCK_PAYMENT.payment_card_id}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
                 <div className="flex items-center gap-2">
@@ -632,7 +821,7 @@ export const BankerCartView: React.FC<BankerCartViewProps> = ({
               <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex items-start gap-2 text-[11px] text-slate-500 dark:text-slate-400 leading-normal">
                 <Lock className="w-3.5 h-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
                 <span>
-                  Submitting this proposal locks inventory at <b>{branchName}</b> with a 48h expiration TTL.
+                  Submitting this proposal locks inventory at <b>{branchName}</b> and redirects directly to payment checkout.
                 </span>
               </div>
 
@@ -642,85 +831,18 @@ export const BankerCartView: React.FC<BankerCartViewProps> = ({
                 className="w-full h-12 rounded-xl bg-accent-gradient hover:scale-[1.01] active:scale-[0.98] disabled:opacity-50 text-white font-extrabold text-xs shadow-xl shadow-brand-500/20 transition-all flex items-center justify-center gap-2"
               >
                 {submitting ? (
-                  <>Processing Stock Lock...</>
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Processing Payment Redirect...</span>
+                  </>
                 ) : (
                   <>
-                    <QrCode className="w-4 h-4" />
-                    <span>Generate QR & Reserve Stock</span>
+                    <ExternalLink className="w-4 h-4" />
+                    <span>Proceed to Payment</span>
                   </>
                 )}
               </Button>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* Instant QR Code Generation Modal on Success */}
-      {createdRequest && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in">
-          <div className="relative w-full max-w-lg rounded-3xl bg-white dark:bg-slate-900 border border-brand/40 shadow-2xl p-6 sm:p-8 space-y-6 text-center">
-            <div className="h-16 w-16 rounded-full bg-brand/15 dark:bg-brand/20 border border-brand/30 mx-auto flex items-center justify-center text-brand">
-              <CheckCircle2 className="w-8 h-8" />
-            </div>
-
-            <div>
-              <span className="px-3 py-1 rounded-full text-xs font-bold bg-brand/10 text-brand border border-brand/20">
-                Stock Reserved & QR Ready
-              </span>
-              <h2 className="text-2xl font-black text-slate-900 dark:text-white mt-2">
-                Financing Request Generated
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                Unique Request ID: <b className="text-brand">{createdRequest.requestNumber}</b>
-              </p>
-            </div>
-
-            {/* Generated QR Code Canvas */}
-            <div className="p-6 rounded-2xl bg-white mx-auto w-fit shadow-2xl border-4 border-slate-100 dark:border-slate-800">
-              <QRCodeSVG
-                value={`https://romlus.bank/scan/${createdRequest.requestNumber}`}
-                size={180}
-                level="H"
-                includeMargin={false}
-              />
-            </div>
-
-            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 flex items-center justify-between">
-              <div className="truncate text-left">
-                <div className="text-[10px] text-slate-400 dark:text-slate-500 uppercase">Verification Token</div>
-                <div className="font-mono text-brand font-bold truncate">{createdRequest.requestNumber}</div>
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => copyToClipboard(createdRequest.requestNumber)}
-                className="h-8 px-3 rounded-lg text-xs flex items-center gap-1.5 font-semibold"
-              >
-                <Copy className="w-3.5 h-3.5" />
-                <span>{copiedCode ? 'Copied!' : 'Copy'}</span>
-              </Button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 pt-2">
-              <Link
-                href={backUrl || defaultBackUrl}
-                className="py-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-white font-semibold text-xs transition-colors flex items-center justify-center"
-              >
-                Back to Catalog
-              </Link>
-              <Button
-                type="button"
-                variant="default"
-                onClick={() => {
-                  setCreatedRequest(null);
-                }}
-                className="h-11 rounded-xl bg-accent-gradient text-white font-bold text-xs shadow-md flex items-center justify-center gap-1"
-              >
-                <span>Done</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </Button>
-            </div>
           </div>
         </div>
       )}

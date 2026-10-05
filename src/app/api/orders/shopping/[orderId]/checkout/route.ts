@@ -11,9 +11,15 @@ const SHOP_BASE_URL =
   process.env.NEXT_PUBLIC_BASE_URL ||
   'https://qa.wingmall.com';
 
-export async function POST(req: NextRequest) {
+export async function POST(
+  req: NextRequest,
+  context: { params: Promise<{ orderId: string }> }
+) {
   const startTime = Date.now();
   try {
+    const { orderId } = await context.params;
+    let body = await req.json().catch(() => ({}));
+
     const authHeader = req.headers.get('Authorization') || req.headers.get('authorization');
     let token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : authHeader;
 
@@ -21,20 +27,19 @@ export async function POST(req: NextRequest) {
       token = req.cookies.get('romlus_consumer_token')?.value || null;
     }
 
-    const body = await req.json();
-
-    logApiRequest('POST', '/api/orders/shopping', {
+    logApiRequest('POST', `/api/orders/shopping/${orderId}/checkout`, {
+      orderId,
       hasToken: !!token,
-      orderGroupsCount: body?.orders?.length || 0,
-      totalAmount: body?.orders?.reduce((sum: number, o: any) => sum + (o.total_amount || 0), 0),
+      deliveryOptionId: body?.metadata?.delivery_option?.delivery_option_id,
+      paymentOptionId: body?.metadata?.payment_option?.id,
     });
 
-    const targetUrl = `${SHOP_BASE_URL}/order/v1/consumer/orders/shopping`;
+    const targetUrl = `${SHOP_BASE_URL}/order/v1/consumer/orders/shopping/${encodeURIComponent(orderId)}/checkout`;
 
     const headers: Record<string, string> = {
       'Accept': 'application/json, text/plain, */*',
       'Accept-Language': 'en-US,en;q=0.9',
-      'Content-Type': 'application/json; charset=utf-8',
+      'Content-Type': 'application/json',
       'device-id': req.headers.get('device-id') || 'Wm3_CSP1A.210812.016',
       'x-dropoff-latitude': req.headers.get('x-dropoff-latitude') || '11.5414619',
     };
@@ -54,35 +59,38 @@ export async function POST(req: NextRequest) {
     const data = await remoteRes.json().catch(() => null);
 
     if (remoteRes.ok && data) {
-      logApiResponse('/api/orders/shopping', 200, {
-        orderId: data.body?.order_id || data.order_id,
-        status: data.body?.status || data.status,
+      const redirectWebUrl = data.body?.payment_redirect_web_url || data.body?.payment_redirect_url;
+      logApiResponse(`/api/orders/shopping/${orderId}/checkout`, 200, {
+        orderId,
+        paymentId: data.body?.payment_id,
+        hasRedirectUrl: !!redirectWebUrl,
+        redirectUrl: redirectWebUrl,
       }, Date.now() - startTime);
 
       return NextResponse.json({
         result: true,
         result_code: '200',
-        result_message: 'Draft order created successfully',
+        result_message: 'Checkout succeeded',
         ...data,
       });
     }
 
-    logApiResponse('/api/orders/shopping', remoteRes.status || 400, data, Date.now() - startTime);
+    logApiResponse(`/api/orders/shopping/${orderId}/checkout`, remoteRes.status || 400, data, Date.now() - startTime);
 
     return NextResponse.json(
       data || {
         result: false,
         result_code: String(remoteRes.status),
-        result_message: 'Failed to create shopping order',
+        result_message: 'Failed to process order checkout',
       },
       { status: remoteRes.status || 400 }
     );
   } catch (error: any) {
-    logApiError('/api/orders/shopping', error);
+    logApiError(`/api/orders/shopping/checkout`, error);
     return NextResponse.json(
       {
         result: false,
-        result_message: error?.message || 'Internal Server Error creating shopping order',
+        result_message: error?.message || 'Internal Server Error during order checkout',
       },
       { status: 500 }
     );

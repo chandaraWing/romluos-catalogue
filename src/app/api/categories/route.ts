@@ -2,18 +2,36 @@ import { NextRequest, NextResponse } from 'next/server';
 import { CategoryItem } from '@/types';
 import { getPreferredLocaleName, formatImageUrl } from '@/lib/utils';
 import { serverCache } from '@/lib/server-cache';
+import {
+  logApiRequest,
+  logUpstreamRequest,
+  logApiResponse,
+  logApiError,
+} from '@/lib/server-logger';
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://qa.wingmall.com';
 
 export async function GET(req: NextRequest) {
+  const startTime = Date.now();
   try {
     const { searchParams } = new URL(req.url);
-    let businessId = searchParams.get('business_id') || searchParams.get('company_id') || '47860';
-    if (!businessId || businessId.startsWith('ROM-') || businessId === 'undefined') {
-      businessId = '47860';
-    }
+    const businessId = searchParams.get('business_id') || searchParams.get('company_id');
     const serviceType = searchParams.get('service_type') || 'ST_SHOPPING';
     const rpp = searchParams.get('rpp') || '1000';
+
+    logApiRequest('GET', '/api/categories', {
+      businessId,
+      serviceType,
+      rpp,
+    });
+
+    if (!businessId || businessId === 'undefined') {
+      logApiResponse('/api/categories', 400, { result: false, result_message: 'business_id / company_id is required' }, Date.now() - startTime);
+      return NextResponse.json(
+        { result: false, result_message: 'business_id / company_id is required', categories: [] },
+        { status: 400 }
+      );
+    }
 
     const authHeader = req.headers.get('Authorization') || req.headers.get('authorization');
     let token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : authHeader;
@@ -30,6 +48,10 @@ export async function GET(req: NextRequest) {
     const cacheKey = `categories:${businessId}:${serviceType}:${rpp}`;
     const cachedResponse = serverCache.get<any>(cacheKey);
     if (cachedResponse) {
+      logApiResponse('/api/categories', 200, {
+        source: 'SERVER_CACHE',
+        categoryCount: cachedResponse.categories?.length || 0,
+      }, Date.now() - startTime);
       return NextResponse.json(cachedResponse, {
         headers: {
           'X-Cache': 'HIT',
@@ -49,6 +71,8 @@ export async function GET(req: NextRequest) {
     if (token) {
       headers['authorization'] = `Bearer ${token}`;
     }
+
+    logUpstreamRequest('GET', targetUrl, headers);
 
     const remoteRes = await fetch(targetUrl, {
       method: 'GET',
@@ -80,6 +104,11 @@ export async function GET(req: NextRequest) {
 
       serverCache.set(cacheKey, responsePayload, 300);
 
+      logApiResponse('/api/categories', 200, {
+        categoryCount: mappedCategories.length,
+        items: mappedCategories.map((c) => ({ id: c.id, name: c.name })),
+      }, Date.now() - startTime);
+
       return NextResponse.json(responsePayload, {
         headers: {
           'X-Cache': 'MISS',
@@ -88,15 +117,17 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    logApiResponse('/api/categories', remoteRes.status || 400, data, Date.now() - startTime);
+
     return NextResponse.json({
       result: false,
-      result_code: data?.code || '400',
+      result_code: data?.code || String(remoteRes.status),
       result_message: data?.message || 'Failed to fetch categories',
       categories: [],
       error_detail: data,
-    });
+    }, { status: remoteRes.status || 400 });
   } catch (error: any) {
-    console.error('Error fetching consumer product types:', error);
+    logApiError('/api/categories', error);
     return NextResponse.json(
       { result: false, result_message: error?.message || 'Failed to fetch product categories', categories: [] },
       { status: 500 }

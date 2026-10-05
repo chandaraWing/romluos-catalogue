@@ -215,9 +215,11 @@ export const LoginForm: React.FC<LoginFormProps> = ({ redirectUrl, onSuccess }) 
                 <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
                   <Building2 className="w-3.5 h-3.5 text-brand" /> Store / Branch
                 </span>
-                <span className="text-[10px] font-mono font-bold text-brand-700 dark:text-brand bg-brand/15 px-2 py-0.5 rounded-full border border-brand/20">
-                  ID: {user.branchId || user.companyId || '47861'}
-                </span>
+                {(user.branchId || user.companyId) && (
+                  <span className="text-[10px] font-mono font-bold text-brand-700 dark:text-brand bg-brand/15 px-2 py-0.5 rounded-full border border-brand/20">
+                    ID: {user.branchId || user.companyId}
+                  </span>
+                )}
               </div>
               <p className="text-sm font-bold text-slate-900 dark:text-white">
                 {user.companyName}

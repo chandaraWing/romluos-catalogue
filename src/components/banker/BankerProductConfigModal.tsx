@@ -51,7 +51,7 @@ export const BankerProductConfigModal: React.FC<BankerProductConfigModalProps> =
     product?.branchId ||
     user?.branchId ||
     partnerProfile?.default_company?.default_branch?.id ||
-    '47861';
+    '';
 
   // Keep selected attributes in sync when product changes
   useEffect(() => {
