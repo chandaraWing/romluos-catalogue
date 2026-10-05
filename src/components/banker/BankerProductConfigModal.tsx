@@ -61,7 +61,7 @@ export const BankerProductConfigModal: React.FC<BankerProductConfigModalProps> =
         return { ...initial, ...prev };
       });
     }
-  }, [product?.id]);
+  }, [product]);
 
   // Fetch Full Product Detail with Variant Attributes & Mappings
   useEffect(() => {
@@ -145,8 +145,6 @@ export const BankerProductConfigModal: React.FC<BankerProductConfigModalProps> =
     return [];
   }, [productDetail?.variant_attributes, product?.variantGroups, product?.specifications?.options]);
 
-  const variantMappings = productDetail?.variant_mappings || {};
-
   // Form the variant lookup key (e.g. "Red_Pixel Buds Pro 2" or "White_Pixel Buds 2a")
   const activeVariantKey = useMemo(() => {
     if (!rawVariantAttributes || rawVariantAttributes.length === 0) return 'DEFAULT';
@@ -161,6 +159,7 @@ export const BankerProductConfigModal: React.FC<BankerProductConfigModalProps> =
 
   // Active matched variant from mappings
   const matchedVariant = useMemo(() => {
+    const variantMappings = productDetail?.variant_mappings || {};
     if (variantMappings[activeVariantKey]) {
       return variantMappings[activeVariantKey];
     }
@@ -171,7 +170,7 @@ export const BankerProductConfigModal: React.FC<BankerProductConfigModalProps> =
       return Object.values(selectedAttributes).every((val) => parts.includes(val));
     });
     return foundKey ? variantMappings[foundKey] : variantMappings['DEFAULT'] || productDetail?.variant || null;
-  }, [variantMappings, activeVariantKey, selectedAttributes, productDetail]);
+  }, [productDetail, activeVariantKey, selectedAttributes]);
 
   if (!product) return null;
 

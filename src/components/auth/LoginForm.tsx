@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ShieldCheck,
@@ -57,22 +57,21 @@ export const LoginForm: React.FC<LoginFormProps> = ({ redirectUrl, onSuccess }) 
   const [loginStep, setLoginStep] = useState<'idle' | 'encrypting' | 'authenticating' | 'complete'>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const pinInputRefs = [
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-  ];
+  const pin0Ref = useRef<HTMLInputElement>(null);
+  const pin1Ref = useRef<HTMLInputElement>(null);
+  const pin2Ref = useRef<HTMLInputElement>(null);
+  const pin3Ref = useRef<HTMLInputElement>(null);
+  const pinInputRefs = useMemo(() => [pin0Ref, pin1Ref, pin2Ref, pin3Ref], []);
 
   // Auto focus first PIN input
   useEffect(() => {
-    if (!isAuthenticated && pinInputRefs[0].current) {
+    if (!isAuthenticated && pin0Ref.current) {
       // Focus if phone is already filled
       if (phone.length >= 8) {
-        pinInputRefs[0].current.focus();
+        pin0Ref.current.focus();
       }
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, phone.length]);
 
   const handlePinChange = (index: number, val: string) => {
     // Only accept numeric characters

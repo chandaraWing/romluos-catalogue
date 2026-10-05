@@ -219,8 +219,10 @@ export function createCustomRequest(token?: string | null, customBaseUrl?: strin
   };
 }
 
-export default {
+const httpRequest = {
   consumer: consumerRequest,
   districtBanker: districtBankerRequest,
   createCustomRequest,
 };
+
+export default httpRequest;

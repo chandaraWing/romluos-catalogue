@@ -417,7 +417,7 @@ function BankerCatalogContent({ hash }: { hash: string }) {
         if (sortBy === 'price-high') return pB - pA;
         return 0;
       });
-  }, [products, searchQuery, selectedCategory, selectedBrand, priceRange, activeFilterTag, sortBy]);
+  }, [products, categories, searchQuery, selectedCategory, selectedBrand, priceRange, activeFilterTag, sortBy]);
 
   // Paginated Results - direct from API page payload
   const totalPages = Math.max(
