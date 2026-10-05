@@ -1,6 +1,6 @@
 {
   "name": "branch-catalog",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "District Banker & Showroom Branch Catalog with Real-Time Stock, Pricing & QR Financing",
   "private": true,
   "scripts": {
