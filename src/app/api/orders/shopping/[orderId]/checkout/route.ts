@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  logApiRequest,
-  logUpstreamRequest,
-  logApiResponse,
-  logApiError,
-} from '@/lib/server-logger';
+import { createCustomRequest } from '@/lib/httpRequest';
+import { logApiError } from '@/lib/server-logger';
 
 const SHOP_BASE_URL =
   process.env.NEXT_PUBLIC_SHOP_BASE_URL ||
@@ -15,7 +11,6 @@ export async function POST(
   req: NextRequest,
   context: { params: Promise<{ orderId: string }> }
 ) {
-  const startTime = Date.now();
   try {
     const { orderId } = await context.params;
     let body = await req.json().catch(() => ({}));
@@ -27,39 +22,18 @@ export async function POST(
       token = req.cookies.get('romluos_consumer_token')?.value || null;
     }
 
-    logApiRequest('POST', `/api/orders/shopping/${orderId}/checkout`, {
-      orderId,
-      hasToken: !!token,
-      deliveryOptionId: body?.metadata?.delivery_option?.delivery_option_id,
-      paymentOptionId: body?.metadata?.payment_option?.id,
-    });
-
     const targetUrl = `${SHOP_BASE_URL}/order/v1/consumer/orders/shopping/${encodeURIComponent(orderId)}/checkout`;
 
-    const headers: Record<string, string> = {
+    const customReq = createCustomRequest(token, SHOP_BASE_URL, {
       'Accept': 'application/json, text/plain, */*',
       'Accept-Language': 'en-US,en;q=0.9',
-      'Content-Type': 'application/json',
       'device-id': req.headers.get('device-id') || 'Wm3_CSP1A.210812.016',
       'x-dropoff-latitude': req.headers.get('x-dropoff-latitude') || '11.5414619',
-    };
-
-    if (token) {
-      headers['Authorization'] = `Bearer ${token.trim()}`;
-    }
-
-    logUpstreamRequest('POST', targetUrl, headers, body);
-
-    const remoteRes = await fetch(targetUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
     });
 
-    const data = await remoteRes.json().catch(() => null);
+    const data = await customReq.post(targetUrl, body);
 
     const isSuccess =
-      remoteRes.ok &&
       data &&
       data.result !== false &&
       data.result_code !== '400' &&
@@ -74,13 +48,6 @@ export async function POST(
         data?.payment_redirect_web_url ||
         null;
 
-      logApiResponse(`/api/orders/shopping/${orderId}/checkout`, 200, {
-        orderId,
-        paymentId: data.body?.payment_id || data?.payment_id,
-        hasRedirectUrl: !!redirectWebUrl,
-        redirectUrl: redirectWebUrl,
-      }, Date.now() - startTime);
-
       return NextResponse.json({
         result: true,
         result_code: '200',
@@ -90,14 +57,12 @@ export async function POST(
       });
     }
 
-    const statusCode = remoteRes.status && remoteRes.status >= 400 ? remoteRes.status : 400;
+    const statusCode = 400;
     const errorMessage =
       data?.result_message ||
       data?.message ||
       data?.body?.message ||
       'Failed to process order checkout';
-
-    logApiResponse(`/api/orders/shopping/${orderId}/checkout`, statusCode, data, Date.now() - startTime);
 
     return NextResponse.json(
       data || {
@@ -108,13 +73,15 @@ export async function POST(
       { status: statusCode }
     );
   } catch (error: any) {
-    logApiError(`/api/orders/shopping/checkout`, error);
+    const status = error.response?.status || 500;
+    const errorData = error.response?.data || {
+      result: false,
+      result_message: error?.message || 'Internal Server Error during order checkout',
+    };
+    logApiError(`/api/orders/shopping/checkout`, error, status);
     return NextResponse.json(
-      {
-        result: false,
-        result_message: error?.message || 'Internal Server Error during order checkout',
-      },
-      { status: 500 }
+      errorData,
+      { status }
     );
   }
 }

@@ -15,12 +15,12 @@ const colors = {
   gray: '\x1b[90m',
 };
 
-function safeStringify(data: any, maxLen = 800): string {
+function safeStringify(data: any, maxLen = 3000): string {
   if (data === undefined || data === null) return '';
   try {
     const str = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
     if (str.length > maxLen) {
-      return str.substring(0, maxLen) + `... (${str.length - maxLen} more bytes)`;
+      return str.substring(0, maxLen) + `\n... (${str.length - maxLen} more characters)`;
     }
     return str;
   } catch {
@@ -34,7 +34,15 @@ export function logApiRequest(method: string, route: string, details?: Record<st
   if (details && Object.keys(details).length > 0) {
     Object.entries(details).forEach(([key, val]) => {
       if (val !== undefined) {
-        console.log(`${colors.cyan}│${colors.reset}  ${colors.bold}${key}:${colors.reset} ${safeStringify(val)}`);
+        const stringified = safeStringify(val, 2000);
+        if (stringified.includes('\n')) {
+          console.log(`${colors.cyan}│${colors.reset}  ${colors.bold}${key}:${colors.reset}`);
+          stringified.split('\n').forEach((l) => {
+            console.log(`${colors.cyan}│${colors.reset}    ${l}`);
+          });
+        } else {
+          console.log(`${colors.cyan}│${colors.reset}  ${colors.bold}${key}:${colors.reset} ${stringified}`);
+        }
       }
     });
   }
@@ -51,7 +59,7 @@ export function logUpstreamRequest(method: string, url: string, headers?: Record
     console.log(`${colors.cyan}│${colors.reset}    ${colors.gray}headers:${colors.reset} ${JSON.stringify(sanitizedHeaders)}`);
   }
   if (body) {
-    console.log(`${colors.cyan}│${colors.reset}    ${colors.gray}body:${colors.reset} ${safeStringify(body, 400)}`);
+    console.log(`${colors.cyan}│${colors.reset}    ${colors.gray}body:${colors.reset} ${safeStringify(body, 1000)}`);
   }
 }
 
@@ -65,15 +73,23 @@ export function logApiResponse(
   const statusColor = isOk ? colors.green : status >= 400 ? colors.red : colors.yellow;
   const durationStr = durationMs !== undefined ? ` (${durationMs}ms)` : '';
 
-  console.log(`${colors.cyan}│${colors.reset}  ${statusColor}${colors.bold}✔ [RESPONSE] ${status}${colors.reset}${colors.gray}${durationStr}${colors.reset}`);
-  if (data !== undefined) {
-    console.log(`${colors.cyan}│${colors.reset}  ${colors.gray}payload:${colors.reset} ${safeStringify(data, 500)}`);
+  console.log(
+    `${colors.cyan}│${colors.reset}  ${statusColor}${colors.bold}✔ [RESPONSE ${status}]${colors.reset} ${colors.cyan}${route}${colors.reset}${colors.gray}${durationStr}${colors.reset}`
+  );
+
+  if (data !== undefined && data !== null) {
+    const stringified = safeStringify(data, 3000);
+    const lines = stringified.split('\n');
+    console.log(`${colors.cyan}│${colors.reset}  ${colors.bold}${isOk ? colors.green : colors.yellow}data:${colors.reset}`);
+    lines.forEach((line) => {
+      console.log(`${colors.cyan}│${colors.reset}    ${line}`);
+    });
   }
   console.log(`${colors.cyan}└──${colors.reset}\n`);
 }
 
 export function logApiError(route: string, error: any, status = 500) {
-  console.log(`${colors.cyan}│${colors.reset}  ${colors.red}${colors.bold}✖ [API ERROR] ${status}:${colors.reset} ${error?.message || error}`);
+  console.log(`${colors.cyan}│${colors.reset}  ${colors.red}${colors.bold}✖ [API ERROR] ${status}:${colors.reset} ${colors.cyan}${route}${colors.reset} - ${error?.message || error}`);
   if (error?.stack) {
     console.log(`${colors.cyan}│${colors.reset}  ${colors.dim}${error.stack.split('\n').slice(0, 3).join('\n│  ')}${colors.reset}`);
   }

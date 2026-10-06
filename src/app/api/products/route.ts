@@ -2,17 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ProductItem, Status } from '@/types';
 import { getPreferredLocaleName, formatImageUrl } from '@/lib/utils';
 import { serverCache } from '@/lib/server-cache';
-import {
-  logApiRequest,
-  logUpstreamRequest,
-  logApiResponse,
-  logApiError,
-} from '@/lib/server-logger';
+import { createCustomRequest } from '@/lib/httpRequest';
+import { logApiError } from '@/lib/server-logger';
 
 const SHOP_BASE_URL = process.env.NEXT_PUBLIC_SHOP_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'https://qa.wingmall.com';
 
 export async function GET(req: NextRequest) {
-  const startTime = Date.now();
   try {
     const { searchParams } = new URL(req.url);
     const page = searchParams.get('page') || '1';
@@ -30,20 +25,7 @@ export async function GET(req: NextRequest) {
       searchParams.get('category_id') ||
       searchParams.get('categoryId');
 
-    logApiRequest('GET', '/api/products', {
-      businessIds,
-      branchIds,
-      categoryFilter: productTypeIds,
-      keyword,
-      sort,
-      minPrice,
-      maxPrice,
-      page,
-      rpp,
-    });
-
     if (!businessIds || businessIds === 'undefined') {
-      logApiResponse('/api/products', 400, { result: false, result_message: 'business_ids / company_id is required' }, Date.now() - startTime);
       return NextResponse.json(
         { result: false, result_message: 'business_ids / company_id is required', products: [] },
         { status: 400 }
@@ -93,26 +75,15 @@ export async function GET(req: NextRequest) {
       targetUrl += `&sort=${encodeURIComponent(sort)}`;
     }
 
-    const headers: Record<string, string> = {
+    const customReq = createCustomRequest(token, SHOP_BASE_URL, {
       'Accept': 'application/json, text/plain, */*',
       'accept-language': 'en-US,en;q=0.9',
       'Connection': 'keep-alive',
-    };
-
-    if (token) {
-      headers['authorization'] = `Bearer ${token}`;
-    }
-
-    logUpstreamRequest('GET', targetUrl, headers);
-
-    const remoteRes = await fetch(targetUrl, {
-      method: 'GET',
-      headers,
     });
 
-    const data = await remoteRes.json().catch(() => null);
+    const data = await customReq.get(targetUrl);
 
-    if (remoteRes.ok && data?.body?.items) {
+    if (data?.body?.items) {
       const rawItems: any[] = data.body.items;
       const mappedProducts: ProductItem[] = rawItems.map((item: any) => {
         const prodName = getPreferredLocaleName(item.info_locales) || item.variant?.name || 'Unnamed Product';
@@ -242,12 +213,6 @@ export async function GET(req: NextRequest) {
 
       serverCache.set(cacheKey, responsePayload, 60);
 
-      logApiResponse('/api/products', 200, {
-        productCount: mappedProducts.length,
-        totalRecords: data.body.records,
-        sample: mappedProducts.slice(0, 2).map((p) => ({ id: p.id, name: p.name })),
-      }, Date.now() - startTime);
-
       return NextResponse.json(responsePayload, {
         headers: {
           'X-Cache': 'MISS',
@@ -256,20 +221,20 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    logApiResponse('/api/products', remoteRes.status || 400, data, Date.now() - startTime);
-
     return NextResponse.json({
       result: false,
-      result_code: data?.code || String(remoteRes.status),
+      result_code: data?.code || '400',
       result_message: data?.message || 'Failed to fetch products',
       products: [],
       error_detail: data,
-    }, { status: remoteRes.status || 400 });
+    }, { status: 400 });
   } catch (error: any) {
-    logApiError('/api/products', error);
+    const status = error.response?.status || 500;
+    const errorData = error.response?.data || { result: false, result_message: error?.message || 'Failed to fetch products' };
+    logApiError('/api/products', error, status);
     return NextResponse.json(
-      { result: false, result_message: error?.message || 'Failed to fetch products' },
-      { status: 500 }
+      errorData,
+      { status }
     );
   }
 }

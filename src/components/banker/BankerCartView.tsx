@@ -146,27 +146,27 @@ export const BankerCartView: React.FC<BankerCartViewProps> = ({
       if (!targetBranchId) return;
       try {
         setLoadingBankers(true);
-        let res = await api
-          .get<any>(`/companies/branches/${targetBranchId}/district-bankers`)
-          .catch(() => null);
-        if (!res || (Array.isArray(res) && res.length === 0)) {
-          res = await api.get<any>(`/banker-links/branch/${targetBranchId}`).catch(() => []);
-        }
-        const list = Array.isArray(res) ? res : res?.data || [];
-        if (isMounted) {
-          if (list.length > 0) {
-            setBankers(list);
-            const matchingBanker = list.find((b: any) => b.id === user?.id);
-            setSelectedBankerId(matchingBanker ? matchingBanker.id : list[0].id);
-          } else {
-            // Default fallback district banker for this branch
-            const fallbackBanker = {
-              id: 'banker-default-01',
-              fullName: 'Sokha Mean',
-              email: 'sokha.mean@nationalbank.com.kh',
-              phone: '+855 23 888 999',
-              branchName: branchName,
-            };
+        if (user && user.id) {
+          const currentBanker = {
+            id: user.id,
+            fullName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || 'District Banker',
+            email: user.email || 'banker@nationalbank.com.kh',
+            phone: user.phone || '+855 23 888 999',
+            branchName: branchName || user.branchName || '',
+          };
+          if (isMounted) {
+            setBankers([currentBanker]);
+            setSelectedBankerId(currentBanker.id);
+          }
+        } else {
+          const fallbackBanker = {
+            id: 'banker-default-01',
+            fullName: 'Sokha Mean',
+            email: 'sokha.mean@nationalbank.com.kh',
+            phone: '+855 23 888 999',
+            branchName: branchName,
+          };
+          if (isMounted) {
             setBankers([fallbackBanker]);
             setSelectedBankerId(fallbackBanker.id);
           }

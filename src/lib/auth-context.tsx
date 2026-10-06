@@ -12,6 +12,7 @@ import {
 import { rsaEncrypt } from '@/lib/cipher';
 import { getPreferredLocaleName } from '@/lib/utils';
 import { api } from '@/lib/api';
+import { httpRequest } from '@/lib/httpRequest';
 
 export interface UserContextType {
   id: string;
@@ -157,21 +158,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       try {
-        const res = await fetch('/api/user/profile', {
+        const json = await httpRequest.get<any>('/api/user/profile', {
           headers: {
             Authorization: `Bearer ${token}`,
           },
         });
 
-        if (!res.ok) {
-          const errData = await res.json().catch(() => null);
-          console.error('Failed to fetch partner profile:', res.status, errData);
-          return null;
-        }
-
-        const json = await res.json();
-
-        if (json.body) {
+        if (json && json.body) {
           setPartnerProfile(json.body);
           if (typeof window !== 'undefined') {
             localStorage.setItem(STORAGE_KEYS.PARTNER_PROFILE, JSON.stringify(json.body));
@@ -236,21 +229,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       try {
         console.log('[fetchBusinesses] Fetching businesses with banker token...');
-        const res = await fetch('/api/partner/businesses', {
+        const json = await httpRequest.get<any>('/api/partner/businesses', {
           headers: {
             Authorization: `Bearer ${token.trim()}`,
           },
         });
 
-        if (!res.ok) {
-          console.warn('Failed to fetch partner businesses:', res.status);
-          return [];
-        }
-
-        const json = await res.json();
-        const list: PartnerBusinessItem[] = Array.isArray(json.body)
+        const list: PartnerBusinessItem[] = Array.isArray(json?.body)
           ? json.body
-          : Array.isArray(json.data)
+          : Array.isArray(json?.data)
           ? json.data
           : [];
 
@@ -789,25 +776,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.warn('Client encryption note, falling back to server encryption:', encErr);
         }
 
-        const res = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+        let json: any;
+        try {
+          json = await httpRequest.post<any>('/api/auth/login', {
             phone,
             pin,
             encryptedPin: encryptedBankerPin || encryptedConsumerPin || undefined,
-          }),
-        });
+          });
+        } catch (err: any) {
+          json = err.response?.data || { success: false, message: err.message };
+        }
 
-        const json = await res.json();
-
-        if (!res.ok || !json.success) {
+        if (!json || !json.success) {
           setLoading(false);
           return {
             success: false,
-            consumerOk: !!json.consumer?.success,
-            districtBankerOk: !!json.district_banker?.success,
-            message: json.message || 'Login failed. Please check your phone number and PIN.',
+            consumerOk: !!json?.consumer?.success,
+            districtBankerOk: !!json?.district_banker?.success,
+            message: json?.message || 'Login failed. Please check your phone number and PIN.',
           };
         }
 

@@ -1,12 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { formatImageUrl, getPreferredLocaleName } from '@/lib/utils';
 import { serverCache } from '@/lib/server-cache';
-import {
-  logApiRequest,
-  logUpstreamRequest,
-  logApiResponse,
-  logApiError,
-} from '@/lib/server-logger';
+import { createCustomRequest } from '@/lib/httpRequest';
+import { logApiError } from '@/lib/server-logger';
 
 const SHOP_BASE_URL = process.env.NEXT_PUBLIC_SHOP_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'https://qa.wingmall.com';
 
@@ -14,7 +9,6 @@ export async function GET(
   req: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  const startTime = Date.now();
   try {
     const { id } = await context.params;
     const { searchParams } = new URL(req.url);
@@ -22,14 +16,7 @@ export async function GET(
     const serviceTypes = searchParams.get('service_types') || 'ST_SHOPPING';
     const branchId = searchParams.get('branch_id');
 
-    logApiRequest('GET', `/api/products/${id}`, {
-      productId: id,
-      branchId,
-      serviceTypes,
-    });
-
     if (!branchId || branchId === 'undefined') {
-      logApiResponse(`/api/products/${id}`, 400, { result: false, result_message: 'branch_id is required' }, Date.now() - startTime);
       return NextResponse.json(
         { result: false, result_message: 'branch_id is required' },
         { status: 400 }
@@ -51,11 +38,6 @@ export async function GET(
     const cacheKey = `product_detail:${id}:${branchId}:${serviceTypes}`;
     const cachedResponse = serverCache.get<any>(cacheKey);
     if (cachedResponse) {
-      logApiResponse(`/api/products/${id}`, 200, {
-        source: 'SERVER_CACHE',
-        productId: id,
-        name: cachedResponse.body?.name || cachedResponse.body?.info_locales?.[0]?.name,
-      }, Date.now() - startTime);
       return NextResponse.json(cachedResponse, {
         headers: {
           'X-Cache': 'HIT',
@@ -66,29 +48,18 @@ export async function GET(
 
     const targetUrl = `${SHOP_BASE_URL}/marketplace/v1/consumer/products/${encodeURIComponent(id)}?service_types=${serviceTypes}&branch_id=${branchId}`;
 
-    const headers: Record<string, string> = {
+    const customReq = createCustomRequest(token, SHOP_BASE_URL, {
       Accept: 'application/json, text/plain, */*',
       'Accept-Language': 'en-US,en;q=0.9',
       'Content-Type': 'application/json; charset=utf-8',
       'device-id': req.headers.get('device-id') || 'Wm3_CSP1A.210812.016',
       'x-dropoff-latitude': req.headers.get('x-dropoff-latitude') || '11.5414619',
       Connection: 'keep-alive',
-    };
-
-    if (token) {
-      headers['Authorization'] = `Bearer ${token.trim()}`;
-    }
-
-    logUpstreamRequest('GET', targetUrl, headers);
-
-    const remoteRes = await fetch(targetUrl, {
-      method: 'GET',
-      headers,
     });
 
-    const data = await remoteRes.json().catch(() => null);
+    const data = await customReq.get(targetUrl);
 
-    if (remoteRes.ok && data?.body) {
+    if (data?.body) {
       const responsePayload = {
         result: true,
         result_code: '200',
@@ -99,12 +70,6 @@ export async function GET(
 
       serverCache.set(cacheKey, responsePayload, 120);
 
-      logApiResponse(`/api/products/${id}`, 200, {
-        productId: id,
-        name: data.body?.name || data.body?.info_locales?.[0]?.name,
-        price: data.body?.price,
-      }, Date.now() - startTime);
-
       return NextResponse.json(responsePayload, {
         headers: {
           'X-Cache': 'MISS',
@@ -113,21 +78,21 @@ export async function GET(
       });
     }
 
-    logApiResponse(`/api/products/${id}`, remoteRes.status || 400, data, Date.now() - startTime);
-
     return NextResponse.json(
       data || {
         result: false,
-        result_code: String(remoteRes.status),
+        result_code: '400',
         result_message: 'Failed to fetch product details',
       },
-      { status: remoteRes.status }
+      { status: 400 }
     );
   } catch (error: any) {
-    logApiError(`/api/products`, error);
+    const status = error.response?.status || 500;
+    const errorData = error.response?.data || { result: false, result_message: error?.message || 'Failed to fetch product detail' };
+    logApiError(`/api/products`, error, status);
     return NextResponse.json(
-      { result: false, result_message: error?.message || 'Failed to fetch product detail' },
-      { status: 500 }
+      errorData,
+      { status }
     );
   }
 }

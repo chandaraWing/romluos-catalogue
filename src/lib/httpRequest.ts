@@ -5,6 +5,11 @@ import axios, {
   AxiosResponse,
   InternalAxiosRequestConfig,
 } from 'axios';
+import {
+  logApiRequest,
+  logApiResponse,
+  logApiError,
+} from './server-logger';
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://qa.wingmall.com';
 
@@ -15,6 +20,13 @@ export const STORAGE_KEYS = {
   DISTRICT_BANKER_SESSION: 'romluos_district_banker_session',
   ACTIVE_TOKEN: 'romluos_auth_token',
 } as const;
+
+interface CustomAxiosRequestConfig extends InternalAxiosRequestConfig {
+  metadata?: {
+    startTime: number;
+    skipLog?: boolean;
+  };
+}
 
 /**
  * Extract Consumer Access Token from browser localStorage/session
@@ -74,16 +86,88 @@ export function getDistrictBankerToken(): string | null {
   return null;
 }
 
+function getFullUrl(config?: CustomAxiosRequestConfig): string {
+  if (!config) return '';
+  const url = config.url || '';
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+  const baseURL = (config.baseURL || '').replace(/\/+$/, '');
+  const path = url.startsWith('/') ? url : `/${url}`;
+  return `${baseURL}${path}`;
+}
+
 /**
- * Factory to create pre-configured Axios instances
+ * Attach request/response logging interceptors to an Axios instance
  */
-function createHttpClient(config: {
+function attachLoggingInterceptors(instance: AxiosInstance, clientName = 'HTTP') {
+  instance.interceptors.request.use(
+    (config: CustomAxiosRequestConfig) => {
+      config.metadata = {
+        startTime: Date.now(),
+        skipLog: (config as any).skipLog,
+      };
+
+      if (!config.metadata.skipLog) {
+        const fullUrl = getFullUrl(config);
+        const method = (config.method || 'GET').toUpperCase();
+        logApiRequest(method, fullUrl, {
+          ...(config.params ? { params: config.params } : {}),
+          ...(config.data ? { body: config.data } : {}),
+        });
+      }
+
+      return config;
+    },
+    (error: AxiosError) => {
+      logApiError(`[${clientName} Request Error]`, error);
+      return Promise.reject(error);
+    }
+  );
+
+  instance.interceptors.response.use(
+    (response: AxiosResponse) => {
+      const config = response.config as CustomAxiosRequestConfig;
+      const durationMs = config.metadata?.startTime
+        ? Date.now() - config.metadata.startTime
+        : undefined;
+
+      if (!config.metadata?.skipLog) {
+        const fullUrl = getFullUrl(config);
+        logApiResponse(fullUrl, response.status, response.data, durationMs);
+      }
+
+      return response;
+    },
+    (error: AxiosError<any>) => {
+      const config = error.config as CustomAxiosRequestConfig | undefined;
+      const durationMs = config?.metadata?.startTime
+        ? Date.now() - config.metadata.startTime
+        : undefined;
+
+      const fullUrl = getFullUrl(config);
+      const status = error.response?.status || 500;
+      const responseData = error.response?.data || error.message;
+
+      if (!config?.metadata?.skipLog) {
+        logApiResponse(fullUrl, status, responseData, durationMs);
+      }
+
+      return Promise.reject(error);
+    }
+  );
+}
+
+/**
+ * Factory to create pre-configured Axios instances with logging & token management
+ */
+export function createHttpClient(config: {
   baseURL?: string;
   getToken?: () => string | null;
   clientType: 'Consumer' | 'DistrictBanker' | 'Generic';
 }): AxiosInstance {
   const instance = axios.create({
-    baseURL: config.baseURL || BASE_URL,
+    baseURL: config.baseURL !== undefined ? config.baseURL : BASE_URL,
     timeout: 30000,
     headers: {
       'Content-Type': 'application/json',
@@ -92,49 +176,23 @@ function createHttpClient(config: {
     },
   });
 
-  // Request Interceptor: Attach Bearer Token & Default Headers
-  instance.interceptors.request.use(
-    (reqConfig: InternalAxiosRequestConfig) => {
-      const token = config.getToken ? config.getToken() : null;
-
-      // If token exists and Authorization header not explicitly set
-      if (token && !reqConfig.headers['Authorization'] && !reqConfig.headers['authorization']) {
-        reqConfig.headers['Authorization'] = `Bearer ${token}`;
-      }
-
-      return reqConfig;
-    },
-    (error: AxiosError) => {
-      return Promise.reject(error);
+  // Bearer Token Interceptor
+  instance.interceptors.request.use((reqConfig: InternalAxiosRequestConfig) => {
+    const token = config.getToken ? config.getToken() : null;
+    if (token && !reqConfig.headers['Authorization'] && !reqConfig.headers['authorization']) {
+      reqConfig.headers['Authorization'] = `Bearer ${token.trim()}`;
     }
-  );
+    return reqConfig;
+  });
 
-  // Response Interceptor: Format and Handle Errors
-  instance.interceptors.response.use(
-    (response: AxiosResponse) => {
-      return response;
-    },
-    (error: AxiosError<any>) => {
-      const status = error.response?.status;
-      const errorData = error.response?.data;
-
-      if (status === 401 || errorData?.code === '900902') {
-        console.warn(`[${config.clientType} Http] Authentication error (401 / Missing Credentials):`, {
-          url: error.config?.url,
-          error: errorData || error.message,
-        });
-      }
-
-      return Promise.reject(error);
-    }
-  );
+  // Attach Logging
+  attachLoggingInterceptors(instance, config.clientType);
 
   return instance;
 }
 
 /**
- * 1. Consumer HTTP Request Client
- * - For consumer-facing API endpoints: product searches, consumer categories, public catalog views
+ * 1. Consumer HTTP Client Instance
  */
 export const consumerAxios = createHttpClient({
   baseURL: BASE_URL,
@@ -143,8 +201,7 @@ export const consumerAxios = createHttpClient({
 });
 
 /**
- * 2. District Banker HTTP Request Client
- * - For banker/partner API endpoints: partner branches, profile, merchant products, QR financing links
+ * 2. District Banker HTTP Client Instance
  */
 export const districtBankerAxios = createHttpClient({
   baseURL: BASE_URL,
@@ -153,56 +210,68 @@ export const districtBankerAxios = createHttpClient({
 });
 
 /**
- * Generic Helper Wrappers for Type-Safe Usage
+ * 3. Generic Global Client Instance
+ */
+export const globalAxios = createHttpClient({
+  baseURL: '',
+  clientType: 'Generic',
+});
+
+/**
+ * Consumer Wrapper Methods
  */
 export const consumerRequest = {
+  instance: consumerAxios,
   get: <T = any>(url: string, config?: AxiosRequestConfig): Promise<T> =>
     consumerAxios.get<T>(url, config).then((res) => res.data),
-
   post: <T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> =>
     consumerAxios.post<T>(url, data, config).then((res) => res.data),
-
   put: <T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> =>
     consumerAxios.put<T>(url, data, config).then((res) => res.data),
-
   patch: <T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> =>
     consumerAxios.patch<T>(url, data, config).then((res) => res.data),
-
   delete: <T = any>(url: string, config?: AxiosRequestConfig): Promise<T> =>
     consumerAxios.delete<T>(url, config).then((res) => res.data),
 };
 
+/**
+ * District Banker Wrapper Methods
+ */
 export const districtBankerRequest = {
+  instance: districtBankerAxios,
   get: <T = any>(url: string, config?: AxiosRequestConfig): Promise<T> =>
     districtBankerAxios.get<T>(url, config).then((res) => res.data),
-
   post: <T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> =>
     districtBankerAxios.post<T>(url, data, config).then((res) => res.data),
-
   put: <T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> =>
     districtBankerAxios.put<T>(url, data, config).then((res) => res.data),
-
   patch: <T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> =>
     districtBankerAxios.patch<T>(url, data, config).then((res) => res.data),
-
   delete: <T = any>(url: string, config?: AxiosRequestConfig): Promise<T> =>
     districtBankerAxios.delete<T>(url, config).then((res) => res.data),
 };
 
 /**
- * Dynamic factory for on-demand custom token usage (e.g. Server Route Handlers)
+ * Dynamic custom request client for Server Route Handlers or parameterized tokens
  */
-export function createCustomRequest(token?: string | null, customBaseUrl?: string) {
+export function createCustomRequest(
+  token?: string | null,
+  customBaseUrl?: string,
+  customHeaders?: Record<string, string>
+) {
   const instance = axios.create({
-    baseURL: customBaseUrl || BASE_URL,
+    baseURL: customBaseUrl !== undefined ? customBaseUrl : BASE_URL,
     timeout: 30000,
     headers: {
       'Content-Type': 'application/json',
       Accept: 'application/json, text/plain, */*',
       'Accept-Language': 'en-US,en;q=0.9',
       ...(token ? { Authorization: `Bearer ${token.trim()}` } : {}),
+      ...(customHeaders || {}),
     },
   });
+
+  attachLoggingInterceptors(instance, 'CustomClient');
 
   return {
     instance,
@@ -216,10 +285,27 @@ export function createCustomRequest(token?: string | null, customBaseUrl?: strin
       instance.patch<T>(url, data, config).then((res) => res.data),
     delete: <T = any>(url: string, config?: AxiosRequestConfig): Promise<T> =>
       instance.delete<T>(url, config).then((res) => res.data),
+    request: <T = any>(config: AxiosRequestConfig): Promise<T> =>
+      instance.request<T>(config).then((res) => res.data),
   };
 }
 
-const httpRequest = {
+/**
+ * Universal httpRequest helper object
+ */
+export const httpRequest = {
+  get: <T = any>(url: string, config?: AxiosRequestConfig): Promise<T> =>
+    globalAxios.get<T>(url, config).then((res) => res.data),
+  post: <T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> =>
+    globalAxios.post<T>(url, data, config).then((res) => res.data),
+  put: <T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> =>
+    globalAxios.put<T>(url, data, config).then((res) => res.data),
+  patch: <T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> =>
+    globalAxios.patch<T>(url, data, config).then((res) => res.data),
+  delete: <T = any>(url: string, config?: AxiosRequestConfig): Promise<T> =>
+    globalAxios.delete<T>(url, config).then((res) => res.data),
+  request: <T = any>(config: AxiosRequestConfig): Promise<T> =>
+    globalAxios.request<T>(config).then((res) => res.data),
   consumer: consumerRequest,
   districtBanker: districtBankerRequest,
   createCustomRequest,

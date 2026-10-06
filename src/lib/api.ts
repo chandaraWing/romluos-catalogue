@@ -1,3 +1,5 @@
+import { httpRequest } from './httpRequest';
+
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://qa.wingmall.com';
 
 interface RequestCacheEntry {
@@ -76,10 +78,13 @@ class ApiClient {
       token = existingAuth.startsWith('Bearer ') ? existingAuth.substring(7) : existingAuth;
     }
 
+    const isBrowser = typeof window !== 'undefined';
     const url = endpoint.startsWith('http')
       ? endpoint
       : endpoint.startsWith('/api')
       ? endpoint
+      : isBrowser
+      ? `/api/${endpoint.replace(/^\//, '')}`
       : `${BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 
     const cacheKey = `${isGet ? 'GET' : options.method}:${url}:${token || ''}`;
@@ -100,22 +105,12 @@ class ApiClient {
     const fetchPromise = (async () => {
       try {
         const { cacheTtlMs: _ttl, skipCache: _skip, ...fetchOptions } = options;
-        const res = await fetch(url, {
-          ...fetchOptions,
+        const resData = await httpRequest.request<T>({
+          url,
+          method: (fetchOptions.method || 'GET') as any,
           headers,
+          data: fetchOptions.body,
         });
-
-        if (!res.ok) {
-          const errorData = await res.json().catch(() => ({}));
-          const errMsg =
-            errorData.result_message ||
-            errorData.message ||
-            errorData.body?.message ||
-            `API Error: ${res.statusText || res.status}`;
-          throw new Error(errMsg);
-        }
-
-        const data = await res.json();
 
         // Cache successful response
         if (isGet && cacheTtlMs > 0) {
@@ -123,13 +118,19 @@ class ApiClient {
             const oldest = this.memoryCache.keys().next().value;
             if (oldest) this.memoryCache.delete(oldest);
           }
-          this.memoryCache.set(cacheKey, { data, timestamp: Date.now() });
+          this.memoryCache.set(cacheKey, { data: resData, timestamp: Date.now() });
         }
 
-        return data as T;
+        return resData;
       } catch (err: any) {
-        console.warn(`API request to ${url} failed:`, err.message);
-        throw err;
+        const errMsg =
+          err?.response?.data?.result_message ||
+          err?.response?.data?.message ||
+          err?.response?.data?.body?.message ||
+          err?.message ||
+          'API request failed';
+        console.warn(`API request to ${url} failed:`, errMsg);
+        throw new Error(errMsg);
       } finally {
         this.inFlightRequests.delete(cacheKey);
       }

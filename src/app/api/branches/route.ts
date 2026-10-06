@@ -7,15 +7,11 @@ import { logApiError } from '@/lib/server-logger';
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://qa.wingmall.com';
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ companyId: string }> }
-) {
+export async function GET(req: NextRequest) {
   try {
-    const { companyId } = await params;
     const { searchParams } = new URL(req.url);
 
-    const businessId = companyId || searchParams.get('business_id') || searchParams.get('company_id');
+    const businessId = searchParams.get('business_id') || searchParams.get('company_id') || searchParams.get('businessId');
     const page = searchParams.get('page') || '1';
     const rpp = searchParams.get('rpp') || '50';
 
@@ -34,7 +30,7 @@ export async function GET(
 
     if (!businessId || businessId === 'undefined') {
       return NextResponse.json(
-        { result: false, result_message: 'companyId / business_id is required', branches: [] },
+        { result: false, result_message: 'business_id / company_id query parameter is required', branches: [] },
         { status: 400 }
       );
     }
@@ -129,7 +125,7 @@ export async function GET(
   } catch (error: any) {
     const status = error.response?.status || 500;
     const errorData = error.response?.data || { result: false, result_message: error?.message || 'Error loading branches', branches: [] };
-    logApiError('/api/company/[companyId]/branches', error, status);
+    logApiError('/api/branches', error, status);
     return NextResponse.json(
       errorData,
       { status }
