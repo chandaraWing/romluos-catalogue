@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowRight, Filter, Package, RotateCcw, X } from 'lucide-react';
@@ -132,6 +132,7 @@ export function BankerCatalogContent({ hash }: { hash?: string }) {
   const [checkoutBranchId, setCheckoutBranchId] = useState<string | null>(null);
   const [checkoutItemIds, setCheckoutItemIds] = useState<string[]>([]);
   const [selectedBranch, setSelectedBranch] = useState<any>(null);
+  const isInitialMount = useRef(true);
 
   const defaultProfileBranch = useMemo(() => {
     if (user?.branchId && user?.branchName) {
@@ -346,13 +347,33 @@ export function BankerCatalogContent({ hash }: { hash?: string }) {
     return () => {
       isMounted = false;
     };
-  }, [hash, fetchCategories, fetchProducts, user?.companyId, user?.branchId, partnerProfile?.default_company?.id, partnerProfile?.default_company?.default_branch?.id, user, partnerProfile, itemsPerPage]);
+  }, [
+    hash,
+    user?.companyId,
+    user?.branchId,
+    partnerProfile?.default_company?.id,
+    partnerProfile?.default_company?.default_branch?.id,
+    itemsPerPage,
+  ]);
 
   // 2. Fetch page whenever currentPage, selectedCategory, sortBy, debouncedSearchQuery, or debouncedPriceRange changes
   useEffect(() => {
     if (loading) return;
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
     loadProductsPage(currentPage);
-  }, [currentPage, selectedCategory, sortBy, debouncedSearchQuery, debouncedPriceRange, selectedBranch?.id, loadProductsPage, loading]);
+  }, [
+    currentPage,
+    selectedCategory,
+    sortBy,
+    debouncedSearchQuery,
+    debouncedPriceRange,
+    selectedBranch?.id,
+    loadProductsPage,
+    loading,
+  ]);
 
   // Dynamic Brand Aggregation
   const companyBrands = useMemo<BrandFilterItem[]>(() => {
@@ -793,13 +814,15 @@ export function BankerCatalogContent({ hash }: { hash?: string }) {
                 sort: sortBy || undefined,
               }).catch(() => []),
             ]);
-            if (catList && catList.length > 0) {
-              setCategories(catList);
-            }
+            setCategories(catList && catList.length > 0 ? catList : []);
+            setSelectedCategory('ALL');
             if (prodList && prodList.length > 0) {
               setProducts(prodList);
               const pInfo = (prodList as any)?.pagination;
               if (pInfo) setPaginationInfo(pInfo);
+            } else {
+              setProducts([]);
+              setPaginationInfo({ page: 1, pages: 1, records: 0 });
             }
             const cName = getPreferredLocaleName(newCompany.name_locales) || newCompany.name || `Business ${newCompany.id}`;
             setCatalogData((prev: any) => {

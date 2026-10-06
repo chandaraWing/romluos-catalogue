@@ -124,3 +124,28 @@ body {
   );
 }
 
+/* Prevent auto-zoom on focus for iOS Safari & Mobile WebKit browsers */
+@media screen and (max-width: 768px) {
+  input,
+  select,
+  textarea,
+  input[type='text'],
+  input[type='password'],
+  input[type='number'],
+  input[type='email'],
+  input[type='tel'],
+  input[type='search'] {
+    font-size: 16px !important;
+  }
+}
+
+/* Eliminate tap zoom delay on interactive elements */
+button,
+input,
+select,
+textarea,
+a {
+  touch-action: manipulation;
+}
+
+

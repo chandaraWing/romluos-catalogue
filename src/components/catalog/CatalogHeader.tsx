@@ -64,12 +64,20 @@ export const CatalogHeader: React.FC<CatalogHeaderProps> = ({
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element | null;
+      // If clicking inside a portal modal (e.g. Branch/Company selector modal dialog), don't close the dropdown
+      if (target && target.closest('[data-portal-modal]')) {
+        return;
+      }
       if (profileDropdownRef.current && !profileDropdownRef.current.contains(event.target as Node)) {
         setProfileDropdownOpen(false);
       }
     };
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setProfileDropdownOpen(false);
+      if (event.key === 'Escape') {
+        if (typeof document !== 'undefined' && document.querySelector('[data-portal-modal]')) return;
+        setProfileDropdownOpen(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     document.addEventListener('keydown', handleEscape);
@@ -99,19 +107,20 @@ export const CatalogHeader: React.FC<CatalogHeaderProps> = ({
         {/* Brand & Company Details */}
         <div className="flex items-center gap-2 sm:gap-6 min-w-0">
           <Link href={homeUrl} className="flex items-center gap-2.5 sm:gap-3 group focus:outline-none min-w-0">
-            <div className="w-16 h-20 p-1 transition-transform flex items-center justify-center flex-shrink-0 overflow-hidden">
+            <div className="h-14 sm:h-14 w-auto max-w-[100px] sm:max-w-[160px] p-1 transition-transform flex items-center justify-center shrink-0 overflow-hidden">
               <img
                 src={'https://d13jxrd8otm92m.cloudfront.net/raw/consumer/USR-260370000450013/profile/RES-262730080811559.png'}
                 alt={'Brand Logo'}
-                className="w-full h-full object-contain"
+                className="h-full w-auto object-contain"
               />
             </div>
           </Link>
         </div>
 
-        {/* Global Branch Selector Modal Trigger */}
-        <div className="flex-1 max-w-sm mx-1 sm:mx-4">
+        {/* Global Branch Selector Modal Trigger (Visible on tablet/desktop, moved to profile dropdown on mobile) */}
+        <div className="hidden sm:block flex-1 max-w-sm mx-1 sm:mx-4">
           <BranchSelector
+            company={company}
             currentBranch={branch}
             onSelectBranch={(b) => {
               if (onSelectBranch) onSelectBranch(b);
@@ -144,27 +153,22 @@ export const CatalogHeader: React.FC<CatalogHeaderProps> = ({
             )}
           </Button>
 
-          {/* My Orders Button */}
-          {(onOpenOrders || onOpenFinancing) && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={onOpenOrders || onOpenFinancing}
-              className="p-2 sm:p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
-              title="My Orders"
-            >
-              <ShoppingBag className="w-4 h-4" />
-            </Button>
-          )}
+          {/* My Orders Button - Links to /romlous-orders */}
+          <Link
+            href="/romlous-orders"
+            className="p-2 sm:p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors flex items-center justify-center shrink-0"
+            title="Rumluos Orders"
+          >
+            <ShoppingBag className="w-4 h-4" />
+          </Link>
 
-          {/* Dark / Light Mode Toggle */}
+          {/* Dark / Light Mode Toggle (Hidden on small screens when user menu contains theme toggle) */}
           <Button
             type="button"
             size="icon"
             variant="ghost"
             onClick={toggleTheme}
-            className="p-2 sm:p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
+            className="hidden sm:inline-flex p-2 sm:p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
             title="Toggle Dark/Light Mode"
           >
             {resolvedTheme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
@@ -199,7 +203,7 @@ export const CatalogHeader: React.FC<CatalogHeaderProps> = ({
 
               {/* Dropdown Menu */}
               {profileDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-72 sm:w-80 rounded-2xl bg-white dark:bg-[#0E131F] border border-slate-200 dark:border-slate-800 shadow-2xl z-50 p-4 space-y-3.5 animate-in fade-in zoom-in-95 duration-150">
+                <div className="absolute right-0 mt-2 w-72 sm:w-80 max-w-[calc(100vw-24px)] rounded-2xl bg-white dark:bg-[#0E131F] border border-slate-200 dark:border-slate-800 shadow-2xl z-50 p-4 space-y-3.5 animate-in fade-in zoom-in-95 duration-150">
                   {/* User Info Header */}
                   <div className="flex items-center gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
                     <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-brand to-brand-600 flex items-center justify-center text-slate-950 font-black text-sm shadow-md shrink-0">
@@ -229,27 +233,55 @@ export const CatalogHeader: React.FC<CatalogHeaderProps> = ({
                     </div>
                   </div>
 
-                  {/* Company & Branch Summary */}
-                  {(user?.companyName || user?.branchName || company?.name) && (
-                    <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800/80 space-y-1 text-xs">
-                      <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 font-semibold text-[11px]">
+                  {/* Company & Branch Selector Section in Dropdown */}
+                  <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800/80 space-y-2 text-xs">
+                    <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 font-semibold text-[11px]">
+                      <span className="flex items-center gap-1.5">
                         <Building2 className="w-3.5 h-3.5 text-brand shrink-0" />
                         <span>Assigned Organization</span>
-                      </div>
-                      <p className="font-bold text-slate-900 dark:text-slate-200 truncate">
-                        {user?.companyName || company?.name}
-                      </p>
-                      {(user?.branchName || branch?.name) && (
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                          <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
-                          <span>{user?.branchName || branch?.name}</span>
-                        </p>
-                      )}
+                      </span>
                     </div>
-                  )}
+
+                    {/* Interactive Company & Branch Selector in Dropdown (Stacked vertically) */}
+                    <div className="w-full">
+                      <BranchSelector
+                        company={company}
+                        currentBranch={branch}
+                        variant="dropdown"
+                        onSelectBranch={(b) => {
+                          setProfileDropdownOpen(false);
+                          if (onSelectBranch) onSelectBranch(b);
+                        }}
+                        onSelectCompany={(c) => {
+                          setProfileDropdownOpen(false);
+                          if (onSelectCompany) onSelectCompany(c);
+                        }}
+                        onSelectCompanyAndBranch={(c, b) => {
+                          setProfileDropdownOpen(false);
+                          if (onSelectCompanyAndBranch) onSelectCompanyAndBranch(c, b);
+                        }}
+                      />
+                    </div>
+                  </div>
 
                   {/* Action Menu Items */}
                   <div className="pt-1 space-y-1.5">
+                    {/* My Orders Link */}
+                    <Link
+                      href="/romlous-orders"
+                      onClick={() => setProfileDropdownOpen(false)}
+                      className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 dark:bg-slate-900/70 dark:hover:bg-slate-800/80 border border-slate-100 dark:border-slate-800/80 text-slate-700 dark:text-slate-200 font-semibold text-xs transition-all cursor-pointer group"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <ShoppingBag className="w-3.5 h-3.5 text-brand group-hover:scale-110 transition-transform shrink-0" />
+                        <span>Rumluos Orders</span>
+                      </div>
+                      <span className="text-[11px] text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 transition-colors">
+                        →
+                      </span>
+                    </Link>
+
+                    {/* View Report */}
                     <button
                       type="button"
                       onClick={() => {
@@ -270,6 +302,25 @@ export const CatalogHeader: React.FC<CatalogHeaderProps> = ({
                       </div>
                       <span className="text-[11px] text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 transition-colors">
                         →
+                      </span>
+                    </button>
+
+                    {/* Dark / Light Mode Switcher (Visible on small screens / in dropdown) */}
+                    <button
+                      type="button"
+                      onClick={toggleTheme}
+                      className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 dark:bg-slate-900/70 dark:hover:bg-slate-800/80 border border-slate-100 dark:border-slate-800/80 text-slate-700 dark:text-slate-200 font-semibold text-xs transition-all cursor-pointer group"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        {resolvedTheme === 'dark' ? (
+                          <Sun className="w-3.5 h-3.5 text-amber-400 group-hover:rotate-45 transition-transform shrink-0" />
+                        ) : (
+                          <Moon className="w-3.5 h-3.5 text-slate-600 dark:text-slate-300 group-hover:-rotate-12 transition-transform shrink-0" />
+                        )}
+                        <span>Theme Mode</span>
+                      </div>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300 capitalize">
+                        {resolvedTheme === 'dark' ? 'Dark' : 'Light'}
                       </span>
                     </button>
 

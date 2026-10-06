@@ -687,7 +687,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (savedConsumerToken) setConsumerToken(savedConsumerToken);
         if (savedDistrictBankerToken) setDistrictBankerToken(savedDistrictBankerToken);
-        if (savedDistrictBankerData) setDistrictBankerData(JSON.parse(savedDistrictBankerData));
+        
+        if (savedDistrictBankerData) {
+          try {
+            setDistrictBankerData(JSON.parse(savedDistrictBankerData));
+          } catch {}
+        }
 
         if (savedBusinesses) {
           try {
@@ -744,6 +749,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         if (savedDistrictBankerToken) {
+          // Fire profile & business refresh in background without blocking
           fetchUserProfile(savedDistrictBankerToken).catch(() => null);
           fetchBusinesses(savedDistrictBankerToken).catch(() => null);
         }
@@ -760,6 +766,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } finally {
         setLoading(false);
       }
+    } else {
+      setLoading(false);
     }
   }, []);
 
@@ -867,28 +875,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           localStorage.setItem(STORAGE_KEYS.ACTIVE_ROLE, primaryRole);
         }
 
-        // Fetch Live Profile & Live Business Company Listing
-        let fetchedBusinesses: PartnerBusinessItem[] = [];
+        // Trigger live profile & businesses refresh in background
         if (bToken) {
-          try {
-            console.log('[AuthContext] Triggering fetchUserProfile & fetchBusinesses for banker session...');
-            const [, bizList] = await Promise.all([
-              fetchUserProfile(bToken).catch((err) => console.error('Failed to load profile on login:', err)),
-              fetchBusinesses(bToken).catch((err) => {
-                console.error('Failed to load businesses on login:', err);
-                return [];
-              }),
-            ]);
-            fetchedBusinesses = bizList || [];
-          } catch (syncErr) {
-            console.error('Failed during login synchronization:', syncErr);
-          }
+          fetchUserProfile(bToken).catch((err) => console.error('Failed to load profile on login:', err));
+          fetchBusinesses(bToken).catch((err) => console.error('Failed to load businesses on login:', err));
         } else if (cToken) {
-          try {
-            await fetchUserProfile(cToken);
-          } catch (profileErr) {
-            console.error('Failed to load profile on login:', profileErr);
-          }
+          fetchUserProfile(cToken).catch((profileErr) => console.error('Failed to load profile on login:', profileErr));
         }
 
         setLoading(false);
@@ -897,7 +889,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           consumerOk: !!json.consumer?.success,
           districtBankerOk: !!json.district_banker?.success,
           profile: profNormalized,
-          businesses: fetchedBusinesses,
+          businesses: [],
           message: 'Authentication successful',
         };
       } catch (err: any) {

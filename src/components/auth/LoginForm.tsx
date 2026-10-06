@@ -49,7 +49,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ redirectUrl, onSuccess }) 
     fetchUserProfile,
   } = useAuth();
 
-  const [phone, setPhone] = useState('77323315');
+  const [phone, setPhone] = useState('');
   const [pinDigits, setPinDigits] = useState(['', '', '', '']);
   const [showPin, setShowPin] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);

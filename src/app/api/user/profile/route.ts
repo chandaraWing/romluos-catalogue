@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPreferredLocaleName } from '@/lib/utils';
+import { serverCache } from '@/lib/server-cache';
 import { createCustomRequest } from '@/lib/httpRequest';
 import { logApiError } from '@/lib/server-logger';
 
@@ -17,6 +18,17 @@ export async function GET(req: NextRequest) {
         { result: false, result_message: 'Authorization token is required' },
         { status: 401 }
       );
+    }
+
+    const cacheKey = `user-profile:${token.slice(-20)}`;
+    const cached = serverCache.get<any>(cacheKey);
+    if (cached) {
+      return NextResponse.json(cached, {
+        headers: {
+          'X-Cache': 'HIT',
+          'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120',
+        },
+      });
     }
 
     const customReq = createCustomRequest(token, BASE_URL, {
@@ -87,7 +99,14 @@ export async function GET(req: NextRequest) {
       },
     };
 
-    return NextResponse.json(payload);
+    serverCache.set(cacheKey, payload, 60);
+
+    return NextResponse.json(payload, {
+      headers: {
+        'X-Cache': 'MISS',
+        'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120',
+      },
+    });
   } catch (error: any) {
     const status = error.response?.status || 500;
     const errorData = error.response?.data || { result: false, result_message: error?.message || 'Failed to fetch user profile' };

@@ -13,13 +13,21 @@ export default function CatalogProtectedLayout({
   const pathname = usePathname();
   const { isAuthenticated, loading } = useAuth();
   const [mounted, setMounted] = useState(false);
+  const [authTimedOut, setAuthTimedOut] = useState(false);
 
   useEffect(() => {
     setMounted(true);
+    // Safety timer: unblock loading state after 800ms max to prevent freeze
+    const timer = setTimeout(() => {
+      setAuthTimedOut(true);
+    }, 800);
+    return () => clearTimeout(timer);
   }, []);
 
+  const isCheckingAuth = (loading && !authTimedOut) || !mounted;
+
   useEffect(() => {
-    if (!loading && mounted && !isAuthenticated) {
+    if (!isCheckingAuth && !isAuthenticated) {
       const redirectUrl =
         pathname && pathname !== '/' ? `/login?redirect=${encodeURIComponent(pathname)}` : '/login';
       
@@ -30,13 +38,13 @@ export default function CatalogProtectedLayout({
         if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
           window.location.replace(redirectUrl);
         }
-      }, 400);
+      }, 300);
 
       return () => clearTimeout(timeoutId);
     }
-  }, [loading, mounted, isAuthenticated, router, pathname]);
+  }, [isCheckingAuth, isAuthenticated, router, pathname]);
 
-  if (loading || !mounted) {
+  if (isCheckingAuth) {
     return (
       <div className="min-h-screen bg-[#FDFEFE] dark:bg-[#0B0F17] flex flex-col items-center justify-center gap-3">
         <div className="w-8 h-8 border-2 border-brand border-t-transparent rounded-full animate-spin" />
