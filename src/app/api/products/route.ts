@@ -77,7 +77,7 @@ export async function GET(req: NextRequest) {
       targetUrl += `&product_type_ids=${encodeURIComponent(productTypeIds)}`;
     }
     if (keyword && keyword.trim()) {
-      targetUrl += `&keyword=${encodeURIComponent(keyword.trim())}`;
+      targetUrl += `&search=${encodeURIComponent(keyword.trim())}&keyword=${encodeURIComponent(keyword.trim())}`;
     }
     if (sort) {
       targetUrl += `&sort=${encodeURIComponent(sort)}`;
@@ -168,6 +168,13 @@ export async function GET(req: NextRequest) {
           };
         });
 
+        const isItemAvailable =
+          item.is_available !== undefined
+            ? Boolean(item.is_available)
+            : item.variant?.is_available !== undefined
+            ? Boolean(item.variant.is_available)
+            : stock > 0 || item.status === 'ACTIVE';
+
         return {
           id: String(item.product_id),
           companyId: String(item.company_info?.id || businessIds),
@@ -199,6 +206,8 @@ export async function GET(req: NextRequest) {
           totalStock: stock,
           totalAvailable: stock,
           inventoryCount: stock,
+          is_available: isItemAvailable,
+          isAvailable: isItemAvailable,
           images: allImages.length > 0 ? allImages : undefined,
           image: allImages[0] || undefined,
           variantGroups: variantGroups.length > 0 ? variantGroups : undefined,

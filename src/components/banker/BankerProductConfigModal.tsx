@@ -198,8 +198,16 @@ export const BankerProductConfigModal: React.FC<BankerProductConfigModalProps> =
     matchedVariant?.stock_on_hand !== undefined
       ? Number(matchedVariant.stock_on_hand)
       : product.availableStock ?? 10;
-
-  const isAvailable = stockOnHand > 0;
+  const isAvailable =
+    productDetail?.is_available !== undefined
+      ? Boolean(productDetail.is_available)
+      : matchedVariant?.is_available !== undefined
+      ? Boolean(matchedVariant.is_available)
+      : product.is_available !== undefined
+      ? Boolean(product.is_available)
+      : product.isAvailable !== undefined
+      ? Boolean(product.isAvailable)
+      : stockOnHand > 0;
   const activeSku = matchedVariant?.sku_code || product.sku;
 
   const displayImage =

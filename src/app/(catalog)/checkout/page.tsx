@@ -1,8 +1,8 @@
 'use client';
 
-import { BankerCartView } from '@/components/banker/BankerCartView';
-import { useSearchParams } from 'next/navigation';
 import React, { Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { BankerCartView } from '@/components/banker/BankerCartView';
 
 function CheckoutPageContent() {
   const searchParams = useSearchParams();

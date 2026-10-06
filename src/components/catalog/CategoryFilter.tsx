@@ -17,8 +17,6 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = ({
   categories,
   selectedCategory,
   onSelectCategory,
-  productCounts = {},
-  totalProductsCount = 0,
 }) => {
   const [search, setSearch] = useState('');
 
@@ -100,20 +98,11 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = ({
             <Layers className="w-3.5 h-3.5 text-slate-400 shrink-0" />
             <span className="truncate">All Categories</span>
           </div>
-          {totalProductsCount > 0 && (
-            <span className="text-[10px] opacity-70 shrink-0">({totalProductsCount})</span>
-          )}
         </button>
 
         {filteredCategories.map((c) => {
           const isSelected = isCategorySelected(c);
           const Icon: LucideIcon = DEFAULT_CATEGORY_ICONS[c.code?.toUpperCase()] || Layers;
-          const count =
-            productCounts[c.code?.toUpperCase()] ??
-            productCounts[c.id] ??
-            productCounts[c.name] ??
-            productCounts[c.code] ??
-            0;
 
           return (
             <button
@@ -138,7 +127,6 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = ({
                 )}
                 <span className="truncate">{c.name}</span>
               </div>
-              <span className="text-[10px] opacity-70 shrink-0">({count})</span>
             </button>
           );
         })}

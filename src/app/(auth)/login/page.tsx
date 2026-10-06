@@ -2,7 +2,7 @@
 
 import React, { Suspense } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Building2, ShieldCheck, Sparkles, KeyRound, Lock, CheckCircle2, QrCode, Sun, Moon } from 'lucide-react';
+import { ArrowLeft, Sun, Moon } from 'lucide-react';
 import { LoginForm } from '@/components/auth/LoginForm';
 import { useTheme } from '@/lib/theme-context';
 import { Button } from '@/components/ui/button';
@@ -21,10 +21,10 @@ export default function LoginPage() {
       <header className="border-b border-slate-200/80 dark:border-slate-800/80 backdrop-blur-md sticky top-0 z-40 bg-white/70 dark:bg-[#070B14]/80 transition-colors">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3 group">
-             <div className="w-16 h-20 p-1 transition-transform flex items-center justify-center flex-shrink-0 overflow-hidden">
+            <div className="w-16 h-20 p-1 transition-transform flex items-center justify-center flex-shrink-0 overflow-hidden">
               <img
-                src={'https://d13jxrd8otm92m.cloudfront.net/raw/consumer/USR-260370000450013/profile/RES-262730080811559.png'}
-                alt={'Brand Logo'}
+                src="https://d13jxrd8otm92m.cloudfront.net/raw/consumer/USR-260370000450013/profile/RES-262730080811559.png"
+                alt="Brand Logo"
                 className="w-full h-full object-contain"
               />
             </div>
@@ -40,7 +40,7 @@ export default function LoginPage() {
 
           <div className="flex items-center gap-2 sm:gap-3">
             <Link
-              href="/DEMO"
+              href="/"
               className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all flex items-center gap-1.5"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
@@ -56,7 +56,7 @@ export default function LoginPage() {
               className="p-2 sm:p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
               title="Toggle Dark/Light Mode"
             >
-              {resolvedTheme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
+              {resolvedTheme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-700" />}
             </Button>
           </div>
         </div>
@@ -64,14 +64,11 @@ export default function LoginPage() {
 
       {/* Main Content Area */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16 relative z-10 w-full">
-        {/* <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center"> */}
-
-          <div className="lg:col-span-6 flex justify-center">
-            <Suspense fallback={<div className="text-slate-400 text-sm">Loading authentication form...</div>}>
-              <LoginForm />
-            </Suspense>
-          </div>
-        {/* </div> */}
+        <div className="lg:col-span-6 flex justify-center">
+          <Suspense fallback={<div className="text-slate-400 text-sm">Loading authentication form...</div>}>
+            <LoginForm />
+          </Suspense>
+        </div>
       </main>
 
       {/* Footer */}

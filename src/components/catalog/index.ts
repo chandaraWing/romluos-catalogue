@@ -13,4 +13,4 @@ export * from './BankerFinancingModal';
 export * from './BranchSelectorModal';
 export * from './CompanySelectorModal';
 export * from './CatalogTypes';
-
+export * from './BankerCatalogContent';

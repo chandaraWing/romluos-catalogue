@@ -22,19 +22,26 @@ export const BankerProductCard: React.FC<BankerProductCardProps> = ({
   onAddToCart,
   onOpenConfigurator,
 }) => {
-  const isAvailable = (product.availableStock ?? product.totalStock ?? 10) > 0;
+  const isAvailable =
+    product.is_available !== undefined
+      ? Boolean(product.is_available)
+      : product.isAvailable !== undefined
+      ? Boolean(product.isAvailable)
+      : (product.availableStock !== undefined ? product.availableStock > 0 : (product.totalStock ?? 10) > 0);
+
   const activeOptions = product.variantGroups || product.specifications?.options || [];
   const hasVariants = Array.isArray(activeOptions) && activeOptions.length > 0;
   const displayPrice = Number(product.unitPrice || product.currentPrice || product.basePrice || 0);
 
   const prefetchProductDetail = useCallback(() => {
-    if (!product?.id || !product?.branchId) return;
+    if (!product?.id || !product?.branchId || !isAvailable) return;
     api.get(`/api/products/${product.id}?branch_id=${product.branchId}&service_types=ST_SHOPPING`, {
       cacheTtlMs: 60000,
     }).catch(() => {});
-  }, [product?.id, product?.branchId]);
+  }, [product?.id, product?.branchId, isAvailable]);
 
   const handleCardClick = () => {
+    if (!isAvailable) return;
     onOpenConfigurator(product);
   };
 
@@ -49,7 +56,9 @@ export const BankerProductCard: React.FC<BankerProductCardProps> = ({
       onClick={handleCardClick}
       onMouseEnter={prefetchProductDetail}
       onTouchStart={prefetchProductDetail}
-      className="bg-white dark:bg-slate-900/90 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group cursor-pointer"
+      className={`bg-white dark:bg-slate-900/90 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group ${
+        isAvailable ? 'cursor-pointer' : 'opacity-65 cursor-not-allowed'
+      }`}
     >
       {/* Product Image & Badges */}
       <div className="relative h-32 xs:h-36 sm:h-48 w-full bg-slate-50 dark:bg-slate-950 overflow-hidden">
@@ -102,18 +111,22 @@ export const BankerProductCard: React.FC<BankerProductCardProps> = ({
             variant={inCartCount > 0 ? 'secondary-glass' : 'gradient-glass'}
             onClick={handleButtonClick}
             disabled={!isAvailable}
-            className="text-[10px] sm:text-xs font-bold gap-1 sm:gap-1.5 h-auto py-1 sm:py-2 px-2 sm:px-3 w-full xs:w-auto"
+            className={`text-[10px] sm:text-xs font-bold gap-1 sm:gap-1.5 h-auto py-1 sm:py-2 px-2 sm:px-3 w-full xs:w-auto ${
+              !isAvailable ? 'opacity-50 cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-400' : ''
+            }`}
           >
-            {inCartCount > 0 ? (
+            {!isAvailable ? (
+              <span className="text-slate-400 font-semibold truncate">Unavailable</span>
+            ) : inCartCount > 0 ? (
               <>
                 <CheckCircle2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-secondary shrink-0" />
-                <span className="text-secondary truncate">({inCartCount})</span>
+                <span className="text-secondary truncate">Selected ({inCartCount})</span>
               </>
             ) : (
               <>
                 <Sparkles className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white dark:text-secondary shrink-0" />
                 <span className="text-white dark:bg-gradient-to-r dark:via-brand-300 dark:from-brand-blue-600 dark:to-primary dark:bg-clip-text dark:text-transparent font-extrabold truncate">
-                  Select
+                  Select Option
                 </span>
               </>
             )}

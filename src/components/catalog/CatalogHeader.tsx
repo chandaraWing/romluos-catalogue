@@ -1,15 +1,28 @@
 'use client';
 
-import React from 'react';
-import Link from 'next/link';
-import { ShoppingCart, Moon, Sun, MapPin, Zap, Flame, ShieldCheck } from 'lucide-react';
-import { useTheme } from '@/lib/theme-context';
-import { useAuth } from '@/lib/auth-context';
-import { CompanyInfo, BranchInfo } from './CatalogTypes';
-
-import { BranchSelector } from './BranchSelectorModal';
-import { BranchItem, PartnerBusinessItem } from '@/types';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/lib/auth-context';
+import { useCart } from '@/lib/cart-context';
+import { useTheme } from '@/lib/theme-context';
+import { BranchItem, PartnerBusinessItem } from '@/types';
+import {
+  BarChart3,
+  Building2,
+  ChevronDown,
+  LogOut,
+  Mail,
+  MapPin,
+  Moon,
+  Phone,
+  ShieldCheck,
+  ShoppingBag,
+  ShoppingCart,
+  Sun
+} from 'lucide-react';
+import Link from 'next/link';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { BranchSelector } from './BranchSelectorModal';
+import { BranchInfo, CompanyInfo } from './CatalogTypes';
 
 interface CatalogHeaderProps {
   company: CompanyInfo;
@@ -17,7 +30,9 @@ interface CatalogHeaderProps {
   homeUrl?: string;
   totalCartItems: number;
   onOpenCart: () => void;
+  onOpenOrders?: () => void;
   onOpenFinancing?: () => void;
+  onOpenReport?: () => void;
   onFilterDeals?: () => void;
   onFilterBestSellers?: () => void;
   onSelectBranch?: (branch: BranchItem) => void;
@@ -31,7 +46,9 @@ export const CatalogHeader: React.FC<CatalogHeaderProps> = ({
   homeUrl = '/',
   totalCartItems,
   onOpenCart,
+  onOpenOrders,
   onOpenFinancing,
+  onOpenReport,
   onFilterDeals,
   onFilterBestSellers,
   onSelectBranch,
@@ -39,7 +56,42 @@ export const CatalogHeader: React.FC<CatalogHeaderProps> = ({
   onSelectCompanyAndBranch,
 }) => {
   const { resolvedTheme, toggleTheme } = useTheme();
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, logout } = useAuth();
+  const { clearCart } = useCart();
+
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const profileDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileDropdownRef.current && !profileDropdownRef.current.contains(event.target as Node)) {
+        setProfileDropdownOpen(false);
+      }
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setProfileDropdownOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, []);
+
+  const userInitials = useMemo(() => {
+    if (!user) return 'U';
+    const first = user.firstName?.[0] || '';
+    const last = user.lastName?.[0] || '';
+    if (first || last) return `${first}${last}`.toUpperCase();
+    return user.phone?.slice(-2) || 'DB';
+  }, [user]);
+
+  const userDisplayName = useMemo(() => {
+    if (!user) return 'User';
+    const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
+    return fullName || user.phone || 'District Banker';
+  }, [user]);
 
   return (
     <header className="sticky top-0 z-40 bg-white/85 dark:bg-[#080c14]/85 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800/80 transition-colors">
@@ -54,72 +106,57 @@ export const CatalogHeader: React.FC<CatalogHeaderProps> = ({
                 className="w-full h-full object-contain"
               />
             </div>
-            {/* <div className="flex flex-col min-w-0">
-              <div className="flex items-center gap-1.5">
-                <span className="font-extrabold text-sm sm:text-lg tracking-tight text-slate-900 dark:text-white group-hover:text-brand transition-colors truncate max-w-[120px] xs:max-w-[180px] sm:max-w-none">
-                  {company?.name || 'Romluos Branch Catalog'}
-                </span>
-                <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-brand animate-pulse flex-shrink-0" title="Verified Branch Catalog" />
-              </div>
-              {branch && (
-                <span className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 font-semibold tracking-wider uppercase truncate max-w-[120px] xs:max-w-[180px] sm:max-w-none">
-                  {branch.name} • {branch.code}
-                </span>
-              )}
-            </div> */}
           </Link>
-
-          {/* Quick Nav Links */}
-          {/* <nav className="hidden md:flex items-center gap-6 text-sm font-semibold text-slate-600 dark:text-slate-400 ml-4">
-            <span className="text-brand dark:text-brand">Branch Shop</span>
-            {onFilterBestSellers && (
-              <button
-                type="button"
-                onClick={onFilterBestSellers}
-                className="hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
-              >
-                Best Sellers
-              </button>
-            )}
-            {onFilterDeals && (
-              <button
-                type="button"
-                onClick={onFilterDeals}
-                className="hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer flex items-center gap-1 text-rose-500 dark:text-rose-400"
-              >
-                <Flame className="w-3.5 h-3.5" />
-                <span>Special Deals</span>
-              </button>
-            )}
-          </nav> */}
         </div>
 
-        {/* Right Action Icons & Controls */}
-        <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
-          {/* Interactive Branch Selector Dropdown */}
+        {/* Global Branch Selector Modal Trigger */}
+        <div className="flex-1 max-w-sm mx-1 sm:mx-4">
           <BranchSelector
             currentBranch={branch}
-            company={company}
-            onSelectBranch={onSelectBranch}
-            onSelectCompany={onSelectCompany}
-            onSelectCompanyAndBranch={onSelectCompanyAndBranch}
+            onSelectBranch={(b) => {
+              if (onSelectBranch) onSelectBranch(b);
+            }}
+            onSelectCompany={(c) => {
+              if (onSelectCompany) onSelectCompany(c);
+            }}
+            onSelectCompanyAndBranch={(c, b) => {
+              if (onSelectCompanyAndBranch) onSelectCompanyAndBranch(c, b);
+            }}
           />
+        </div>
 
-          {/* Banker / Consumer Auth Indicator */}
-          <Link
-            href="/login"
-            className={`p-2 sm:px-3 sm:py-2 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all ${
-              isAuthenticated
-                ? 'bg-brand/10 border-brand/30 text-brand-700 dark:text-brand hover:bg-brand/20'
-                : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-brand hover:border-brand'
-            }`}
-            title={isAuthenticated ? `Logged in: ${user?.phone || 'Active Session'}` : 'Sign in as Banker/Consumer'}
+        {/* Right Toolbar Actions */}
+        <div className="flex items-center gap-1.5 sm:gap-2.5">
+          {/* Cart Drawer Trigger Button */}
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            onClick={onOpenCart}
+            className="relative p-2 sm:p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
+            title="View Cart"
           >
-            <ShieldCheck className="w-4 h-4 text-brand flex-shrink-0" />
-            <span className="hidden sm:inline font-bold">
-              {isAuthenticated ? user?.firstName || 'Banker' : 'Sign In'}
-            </span>
-          </Link>
+            <ShoppingCart className="w-4 h-4" />
+            {totalCartItems > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1 rounded-full bg-brand text-slate-950 text-[10px] font-black flex items-center justify-center shadow-md shadow-brand/30 animate-scale-in z-10 pointer-events-none">
+                {totalCartItems > 99 ? '99+' : totalCartItems}
+              </span>
+            )}
+          </Button>
+
+          {/* My Orders Button */}
+          {(onOpenOrders || onOpenFinancing) && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={onOpenOrders || onOpenFinancing}
+              className="p-2 sm:p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
+              title="My Orders"
+            >
+              <ShoppingBag className="w-4 h-4" />
+            </Button>
+          )}
 
           {/* Dark / Light Mode Toggle */}
           <Button
@@ -133,37 +170,134 @@ export const CatalogHeader: React.FC<CatalogHeaderProps> = ({
             {resolvedTheme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
           </Button>
 
-          {/* Cart Drawer Trigger Button */}
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            onClick={onOpenCart}
-            className="relative p-2 sm:p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:text-brand dark:hover:text-brand transition-colors flex items-center justify-center"
-            title="View Cart"
-          >
-            <ShoppingCart className="w-4 h-4" />
-            {totalCartItems > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-brand text-slate-950 text-[10px] font-black flex items-center justify-center shadow-md shadow-brand/30 animate-scale-in">
-                {totalCartItems > 99 ? '99+' : totalCartItems}
-              </span>
-            )}
-          </Button>
+          {/* User Profile Avatar & Dropdown Menu */}
+          {isAuthenticated ? (
+            <div className="relative" ref={profileDropdownRef}>
+              <button
+                type="button"
+                onClick={() => setProfileDropdownOpen((prev) => !prev)}
+                className="flex items-center gap-2 p-1 sm:px-2 sm:py-1 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-slate-700/60 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand/40"
+                title="Account Menu"
+              >
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gradient-to-br from-brand to-brand-600 flex items-center justify-center text-slate-950 font-black text-xs shadow-xs">
+                  {userInitials}
+                </div>
+                <div className="hidden md:flex flex-col text-left">
+                  <span className="text-xs font-bold text-slate-900 dark:text-white leading-tight truncate max-w-[100px]">
+                    {userDisplayName}
+                  </span>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium leading-tight">
+                    {user?.role === 'DISTRICT_BANKER' ? 'District Banker' : 'Partner'}
+                  </span>
+                </div>
+                <ChevronDown
+                  className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 hidden md:block ${
+                    profileDropdownOpen ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
 
-          {/* Direct Banker Financing Button */}
-          {onOpenFinancing && (
-            <Button
-              type="button"
-              variant="gradient-outline"
-              size="sm"
-              onClick={onOpenFinancing}
-              className="hidden lg:flex items-center gap-1.5 rounded-xl group"
+              {/* Dropdown Menu */}
+              {profileDropdownOpen && (
+                <div className="absolute right-0 mt-2 w-72 sm:w-80 rounded-2xl bg-white dark:bg-[#0E131F] border border-slate-200 dark:border-slate-800 shadow-2xl z-50 p-4 space-y-3.5 animate-in fade-in zoom-in-95 duration-150">
+                  {/* User Info Header */}
+                  <div className="flex items-center gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-brand to-brand-600 flex items-center justify-center text-slate-950 font-black text-sm shadow-md shrink-0">
+                      {userInitials}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-1">
+                        <h4 className="font-bold text-sm text-slate-900 dark:text-white truncate">
+                          {userDisplayName}
+                        </h4>
+                        <span className="text-[9px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-brand/15 text-brand dark:text-brand border border-brand/30 shrink-0">
+                          {user?.role || 'Banker'}
+                        </span>
+                      </div>
+                      {user?.phone && (
+                        <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
+                          <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                          <span>{user.phone}</span>
+                        </p>
+                      )}
+                      {user?.email && (
+                        <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5 truncate">
+                          <Mail className="w-3 h-3 text-slate-400 shrink-0" />
+                          <span className="truncate">{user.email}</span>
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Company & Branch Summary */}
+                  {(user?.companyName || user?.branchName || company?.name) && (
+                    <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800/80 space-y-1 text-xs">
+                      <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 font-semibold text-[11px]">
+                        <Building2 className="w-3.5 h-3.5 text-brand shrink-0" />
+                        <span>Assigned Organization</span>
+                      </div>
+                      <p className="font-bold text-slate-900 dark:text-slate-200 truncate">
+                        {user?.companyName || company?.name}
+                      </p>
+                      {(user?.branchName || branch?.name) && (
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                          <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                          <span>{user?.branchName || branch?.name}</span>
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Action Menu Items */}
+                  <div className="pt-1 space-y-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProfileDropdownOpen(false);
+                        if (onOpenReport) {
+                          onOpenReport();
+                        } else if (onOpenOrders) {
+                          onOpenOrders();
+                        } else if (onOpenFinancing) {
+                          onOpenFinancing();
+                        }
+                      }}
+                      className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 dark:bg-slate-900/70 dark:hover:bg-slate-800/80 border border-slate-100 dark:border-slate-800/80 text-slate-700 dark:text-slate-200 font-semibold text-xs transition-all cursor-pointer group"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <BarChart3 className="w-3.5 h-3.5 text-brand group-hover:scale-110 transition-transform shrink-0" />
+                        <span>View Report</span>
+                      </div>
+                      <span className="text-[11px] text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 transition-colors">
+                        →
+                      </span>
+                    </button>
+
+                    {/* Sign Out Button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProfileDropdownOpen(false);
+                        clearCart();
+                        logout();
+                      }}
+                      className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/10 dark:hover:bg-rose-500/20 border border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400 font-bold text-xs transition-colors cursor-pointer"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>Sign Out</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <Link
+              href="/login"
+              className="p-2 sm:px-3 sm:py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-brand hover:border-brand text-xs font-semibold flex items-center gap-1.5 transition-all"
             >
-              <Zap className="w-3.5 h-3.5 text-brand-600 dark:text-brand group-hover:scale-110 transition-transform shrink-0" />
-              <span className="font-bold bg-gradient-to-r from-brand-700 via-brand-600 to-brand-blue-600 dark:from-brand dark:via-brand-200 dark:to-brand-blue bg-clip-text text-transparent">
-                Checkout Cart
-              </span>
-            </Button>
+              <ShieldCheck className="w-4 h-4 text-brand flex-shrink-0" />
+              <span className="hidden sm:inline font-bold">Sign In</span>
+            </Link>
           )}
         </div>
       </div>

@@ -156,24 +156,58 @@ const CartContext = createContext<CartContextValue>({
   estimatedMonthly: 0,
 });
 
+const CART_STORAGE_KEY = 'romluos_branch_cart';
+
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [items, setItems] = useState<CartItem[]>([]);
   const [downPaymentRate, setDownPaymentRate] = useState<number>(0.1); // Default 10%
 
   useEffect(() => {
-    const saved = localStorage.getItem('romluos_branch_cart');
-    if (saved) {
-      try {
-        setItems(JSON.parse(saved));
-      } catch (e) {
-        setItems([]);
+    if (typeof window === 'undefined') return;
+    try {
+      const savedSession = sessionStorage.getItem(CART_STORAGE_KEY);
+      if (savedSession) {
+        setItems(JSON.parse(savedSession));
+      } else {
+        // Check and migrate legacy localStorage cart if present
+        const savedLocal = localStorage.getItem(CART_STORAGE_KEY);
+        if (savedLocal) {
+          const parsed = JSON.parse(savedLocal);
+          setItems(parsed);
+          sessionStorage.setItem(CART_STORAGE_KEY, savedLocal);
+          localStorage.removeItem(CART_STORAGE_KEY);
+        }
       }
+    } catch (e) {
+      console.warn('Failed to load cart from sessionStorage', e);
+      setItems([]);
     }
+
+    const handleCartClear = () => {
+      setItems([]);
+      try {
+        sessionStorage.removeItem(CART_STORAGE_KEY);
+        localStorage.removeItem(CART_STORAGE_KEY);
+      } catch (e) {
+        // ignore
+      }
+    };
+
+    window.addEventListener('cart:clear', handleCartClear);
+    return () => {
+      window.removeEventListener('cart:clear', handleCartClear);
+    };
   }, []);
 
   const saveItems = (newItems: CartItem[]) => {
     setItems(newItems);
-    localStorage.setItem('romluos_branch_cart', JSON.stringify(newItems));
+    if (typeof window !== 'undefined') {
+      try {
+        sessionStorage.setItem(CART_STORAGE_KEY, JSON.stringify(newItems));
+      } catch (e) {
+        console.warn('Failed to save cart to sessionStorage', e);
+      }
+    }
   };
 
   const getItemKey = (item: CartItem): string => {
@@ -208,7 +242,13 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const removeItem = useCallback((targetId: string) => {
     setItems((prev) => {
       const filtered = prev.filter((i) => (i.id ? i.id !== targetId : i.productId !== targetId));
-      localStorage.setItem('romluos_branch_cart', JSON.stringify(filtered));
+      if (typeof window !== 'undefined') {
+        try {
+          sessionStorage.setItem(CART_STORAGE_KEY, JSON.stringify(filtered));
+        } catch (e) {
+          console.warn('Failed to update cart in sessionStorage', e);
+        }
+      }
       return filtered;
     });
   }, []);
@@ -226,7 +266,13 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         return i;
       });
-      localStorage.setItem('romluos_branch_cart', JSON.stringify(updated));
+      if (typeof window !== 'undefined') {
+        try {
+          sessionStorage.setItem(CART_STORAGE_KEY, JSON.stringify(updated));
+        } catch (e) {
+          console.warn('Failed to update cart in sessionStorage', e);
+        }
+      }
       return updated;
     });
   }, [removeItem]);

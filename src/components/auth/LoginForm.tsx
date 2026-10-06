@@ -32,7 +32,7 @@ interface LoginFormProps {
 export const LoginForm: React.FC<LoginFormProps> = ({ redirectUrl, onSuccess }) => {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const targetRedirect = redirectUrl || searchParams.get('redirect') || '/DEMO';
+  const targetRedirect = redirectUrl || searchParams.get('redirect') || '/';
   const { resolvedTheme } = useTheme();
 
   const {

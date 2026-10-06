@@ -38,7 +38,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 export interface BankerCartViewProps {
@@ -74,7 +74,9 @@ export const BankerCartView: React.FC<BankerCartViewProps> = ({
     if (urlOrderId) {
       setActiveOrderId(urlOrderId);
     } else if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('romluos_active_draft_order_id');
+      const stored =
+        sessionStorage.getItem('romluos_active_draft_order_id') ||
+        localStorage.getItem('romluos_active_draft_order_id');
       if (stored) setActiveOrderId(stored);
     }
   }, [urlOrderId]);
@@ -192,41 +194,50 @@ export const BankerCartView: React.FC<BankerCartViewProps> = ({
   }, [targetBranchId, branchName, user?.id]);
 
   // Automatic Draft Order Synchronization on Checkout Load
-  useEffect(() => {
+  const syncDraftOrder = useCallback(async () => {
     if (!activeOrderId) return;
     const orderIdToSync = String(activeOrderId);
 
-    let isMounted = true;
-    async function syncDraftOrder() {
-      setIsSyncingDraft(true);
-      try {
-        console.log('[BankerCartView] Automatically updating draft order with mock delivery:', orderIdToSync);
-        const updateRes = await updateShoppingOrder(
-          orderIdToSync,
-          {
-            order_id: orderIdToSync,
-            delivery: DEFAULT_MOCK_DELIVERY,
-            payment: DEFAULT_MOCK_PAYMENT,
-          },
-          consumerToken || undefined
-        );
+    setIsSyncingDraft(true);
+    try {
+      console.log('[BankerCartView] Updating draft order with delivery info:', orderIdToSync);
+      const updateRes = await updateShoppingOrder(
+        orderIdToSync,
+        {
+          order_id: orderIdToSync,
+          delivery: DEFAULT_MOCK_DELIVERY,
+          payment: DEFAULT_MOCK_PAYMENT,
+        },
+        consumerToken || undefined
+      );
 
-        if (isMounted) {
-          setDraftSynced(true);
-          setDraftOrderData(updateRes?.body || updateRes?.data || updateRes);
-        }
-      } catch (err) {
-        console.warn('Draft order auto-update notification:', err);
-      } finally {
-        if (isMounted) setIsSyncingDraft(false);
+      const isSuccess =
+        updateRes &&
+        updateRes.result !== false &&
+        (updateRes.result === true ||
+          updateRes.result_code === '200' ||
+          updateRes.result_code === 200 ||
+          updateRes.code === 200 ||
+          updateRes.body ||
+          updateRes.data);
+
+      if (isSuccess) {
+        setDraftSynced(true);
+        setDraftOrderData(updateRes?.body || updateRes?.data || updateRes);
+      } else {
+        setDraftSynced(false);
       }
+    } catch (err) {
+      console.warn('Draft order auto-update error:', err);
+      setDraftSynced(false);
+    } finally {
+      setIsSyncingDraft(false);
     }
-
-    syncDraftOrder();
-    return () => {
-      isMounted = false;
-    };
   }, [activeOrderId, consumerToken]);
+
+  useEffect(() => {
+    syncDraftOrder();
+  }, [syncDraftOrder]);
 
   const selectedBanker = bankers.find((b) => b.id === selectedBankerId) || bankers[0];
 
@@ -286,18 +297,43 @@ export const BankerCartView: React.FC<BankerCartViewProps> = ({
 
       // Update draft order with customer notes & mock delivery
       if (finalOrderId) {
-        await updateShoppingOrder(
-          finalOrderId,
-          {
-            order_id: finalOrderId,
-            delivery: {
-              ...DEFAULT_MOCK_DELIVERY,
-              rider_note: notes,
+        try {
+          const updateDeliveryRes = await updateShoppingOrder(
+            finalOrderId,
+            {
+              order_id: finalOrderId,
+              delivery: {
+                ...DEFAULT_MOCK_DELIVERY,
+                rider_note: notes,
+              },
+              payment: DEFAULT_MOCK_PAYMENT,
             },
-            payment: DEFAULT_MOCK_PAYMENT,
-          },
-          consumerToken || undefined
-        ).catch((uErr) => console.warn('Update on submit note:', uErr));
+            consumerToken || undefined
+          );
+
+          const updateSuccess =
+            updateDeliveryRes &&
+            updateDeliveryRes.result !== false &&
+            (updateDeliveryRes.result === true ||
+              updateDeliveryRes.result_code === '200' ||
+              updateDeliveryRes.result_code === 200 ||
+              updateDeliveryRes.code === 200 ||
+              updateDeliveryRes.body ||
+              updateDeliveryRes.data);
+
+          if (!updateSuccess) {
+            if (popupTab && !popupTab.closed) popupTab.close();
+            const err = updateDeliveryRes?.result_message || 'Failed to update delivery information';
+            toast.error(err);
+            return;
+          }
+          setDraftSynced(true);
+        } catch (uErr: any) {
+          if (popupTab && !popupTab.closed) popupTab.close();
+          console.warn('Update delivery information error:', uErr);
+          toast.error(uErr?.message || 'Failed to update delivery information');
+          return;
+        }
       }
 
       // Call checkout API
@@ -309,15 +345,27 @@ export const BankerCartView: React.FC<BankerCartViewProps> = ({
             consumerToken || undefined
           );
 
+          const isCheckoutSuccess =
+            checkoutRes &&
+            checkoutRes.result !== false &&
+            (checkoutRes.result === true ||
+              checkoutRes.result_code === '200' ||
+              checkoutRes.result_code === 200 ||
+              checkoutRes.code === 200 ||
+              checkoutRes.payment_redirect_web_url ||
+              checkoutRes.body?.payment_redirect_web_url);
+
           const paymentRedirectWebUrl =
-            checkoutRes?.body?.payment_redirect_web_url ||
-            checkoutRes?.body?.payment_redirect_url ||
             checkoutRes?.payment_redirect_web_url ||
-            checkoutRes?.payment_redirect_url ||
-            checkoutRes?.redirectUrl ||
+            checkoutRes?.body?.payment_redirect_web_url ||
             null;
 
-          if (paymentRedirectWebUrl) {
+          const hasValidRedirectUrl =
+            typeof paymentRedirectWebUrl === 'string' &&
+            paymentRedirectWebUrl.trim().length > 0 &&
+            (paymentRedirectWebUrl.startsWith('http://') || paymentRedirectWebUrl.startsWith('https://'));
+
+          if (isCheckoutSuccess && hasValidRedirectUrl && paymentRedirectWebUrl) {
             setCompletedPaymentUrl(paymentRedirectWebUrl);
             toast.success('Redirecting to Wing payment checkout...');
 
@@ -338,18 +386,30 @@ export const BankerCartView: React.FC<BankerCartViewProps> = ({
             }
           } else {
             if (popupTab && !popupTab.closed) popupTab.close();
-            toast.error(checkoutRes?.result_message || 'Payment checkout URL not received');
+            if (!isCheckoutSuccess) {
+              const errMsg = checkoutRes?.result_message || 'Failed to complete checkout process';
+              toast.error(errMsg);
+              return;
+            }
+            if (checkoutRes?.result_message) {
+              toast.info(checkoutRes.result_message);
+            }
           }
         } catch (checkoutErr: any) {
           if (popupTab && !popupTab.closed) popupTab.close();
-          console.warn('Checkout API request note:', checkoutErr);
-          toast.error('Failed to complete checkout process');
+          console.warn('Checkout API request error:', checkoutErr);
+          const errMsg = checkoutErr?.message || 'Failed to complete checkout process';
+          toast.error(errMsg);
+          return;
         }
       }
 
       displayItems.forEach((i) => removeItem(i.id || i.productId));
       if (typeof window !== 'undefined') {
+        sessionStorage.removeItem('romluos_active_draft_order_id');
+        sessionStorage.removeItem('romluos_active_draft_order');
         localStorage.removeItem('romluos_active_draft_order_id');
+        localStorage.removeItem('romluos_active_draft_order');
       }
     } catch (err: any) {
       if (popupTab && !popupTab.closed) popupTab.close();
@@ -482,9 +542,18 @@ export const BankerCartView: React.FC<BankerCartViewProps> = ({
                   ) : draftSynced ? (
                     <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
                       <CheckCircle2 className="w-3 h-3" />
-                      Order Synchronized
+                      Delivery Info Synchronized
                     </span>
-                  ) : null}
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => syncDraftOrder()}
+                      className="inline-flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20 hover:bg-amber-500/20 transition-colors cursor-pointer"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      Retry Sync Delivery
+                    </button>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
@@ -827,13 +896,18 @@ export const BankerCartView: React.FC<BankerCartViewProps> = ({
 
               <Button
                 type="submit"
-                disabled={submitting || displayItems.length === 0}
+                disabled={submitting || isSyncingDraft || displayItems.length === 0 || (!!activeOrderId && !draftSynced)}
                 className="w-full h-12 rounded-xl bg-accent-gradient hover:scale-[1.01] active:scale-[0.98] disabled:opacity-50 text-white font-extrabold text-xs shadow-xl shadow-brand-500/20 transition-all flex items-center justify-center gap-2"
               >
                 {submitting ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
                     <span>Processing Payment Redirect...</span>
+                  </>
+                ) : isSyncingDraft ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Updating Delivery Info...</span>
                   </>
                 ) : (
                   <>

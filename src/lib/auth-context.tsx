@@ -377,9 +377,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         let url = `/api/categories?business_id=${businessId}&service_type=ST_SHOPPING&rpp=1000`;
-        if (activeConsumerToken) {
-          url += `&access_token=${encodeURIComponent(activeConsumerToken)}`;
-        }
 
         const data = await api.get<any>(url, { headers, cacheTtlMs: 120000 });
         return data.categories || [];
@@ -467,13 +464,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           url += `&product_type_ids=${encodeURIComponent(productTypeIds)}`;
         }
         if (keyword && keyword.trim()) {
-          url += `&keyword=${encodeURIComponent(keyword.trim())}`;
+          url += `&search=${encodeURIComponent(keyword.trim())}&keyword=${encodeURIComponent(keyword.trim())}`;
         }
         if (sort) {
           url += `&sort=${encodeURIComponent(sort)}`;
-        }
-        if (activeConsumerToken) {
-          url += `&access_token=${encodeURIComponent(activeConsumerToken)}`;
         }
 
         const data = await api.get<any>(url, { headers, cacheTtlMs: 30000 });
@@ -651,6 +645,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (typeof window !== 'undefined') {
       Object.values(STORAGE_KEYS).forEach((key) => localStorage.removeItem(key));
+      sessionStorage.removeItem('romluos_branch_cart');
+      sessionStorage.removeItem('romluos_active_draft_order');
+      sessionStorage.removeItem('romluos_active_draft_order_id');
+      localStorage.removeItem('romluos_branch_cart');
+      localStorage.removeItem('romluos_active_draft_order');
+      localStorage.removeItem('romluos_active_draft_order_id');
+      window.dispatchEvent(new Event('cart:clear'));
     }
   }, []);
 
@@ -724,11 +725,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               branchName: bName,
             });
           } catch {}
-        } else if (savedDistrictBankerToken) {
-          fetchUserProfile(savedDistrictBankerToken).catch(() => null);
+        } else if (savedDistrictBankerData || savedConsumerData || savedDistrictBankerToken || savedConsumerToken) {
+          let parsedData: any = null;
+          try {
+            if (savedDistrictBankerData) parsedData = JSON.parse(savedDistrictBankerData);
+            else if (savedConsumerData) parsedData = JSON.parse(savedConsumerData);
+          } catch {}
+
+          setUser({
+            id: parsedData?.id || 'usr_active',
+            phone: parsedData?.phone || parsedData?.phone_number || '',
+            email: parsedData?.email || '',
+            firstName: parsedData?.firstName || parsedData?.first_name || 'Partner',
+            lastName: parsedData?.lastName || parsedData?.last_name || 'Banker',
+            role: savedDistrictBankerToken ? Role.DISTRICT_BANKER : Role.CONSUMER,
+            companyId: parsedData?.companyId || parsedData?.default_company?.id,
+            companyName: parsedData?.companyName || parsedData?.default_company?.name,
+            branchId: parsedData?.branchId || parsedData?.default_company?.default_branch?.id,
+            branchName: parsedData?.branchName || parsedData?.default_company?.default_branch?.name,
+          });
         }
 
         if (savedDistrictBankerToken) {
+          fetchUserProfile(savedDistrictBankerToken).catch(() => null);
           fetchBusinesses(savedDistrictBankerToken).catch(() => null);
         }
 
@@ -745,7 +764,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setLoading(false);
       }
     }
-  }, [fetchUserProfile, fetchBusinesses]);
+  }, []);
 
   const login = useCallback(
     async ({ phone, pin }: { phone: string; pin: string }): Promise<LoginResult> => {

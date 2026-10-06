@@ -58,11 +58,25 @@ export async function POST(
 
     const data = await remoteRes.json().catch(() => null);
 
-    if (remoteRes.ok && data) {
-      const redirectWebUrl = data.body?.payment_redirect_web_url || data.body?.payment_redirect_url;
+    const isSuccess =
+      remoteRes.ok &&
+      data &&
+      data.result !== false &&
+      data.result_code !== '400' &&
+      data.result_code !== '401' &&
+      data.result_code !== '403' &&
+      data.result_code !== '404' &&
+      data.result_code !== '500';
+
+    if (isSuccess && data) {
+      const redirectWebUrl =
+        data.body?.payment_redirect_web_url ||
+        data?.payment_redirect_web_url ||
+        null;
+
       logApiResponse(`/api/orders/shopping/${orderId}/checkout`, 200, {
         orderId,
-        paymentId: data.body?.payment_id,
+        paymentId: data.body?.payment_id || data?.payment_id,
         hasRedirectUrl: !!redirectWebUrl,
         redirectUrl: redirectWebUrl,
       }, Date.now() - startTime);
@@ -70,20 +84,28 @@ export async function POST(
       return NextResponse.json({
         result: true,
         result_code: '200',
-        result_message: 'Checkout succeeded',
+        result_message: data.result_message || 'Checkout succeeded',
         ...data,
+        payment_redirect_web_url: redirectWebUrl,
       });
     }
 
-    logApiResponse(`/api/orders/shopping/${orderId}/checkout`, remoteRes.status || 400, data, Date.now() - startTime);
+    const statusCode = remoteRes.status && remoteRes.status >= 400 ? remoteRes.status : 400;
+    const errorMessage =
+      data?.result_message ||
+      data?.message ||
+      data?.body?.message ||
+      'Failed to process order checkout';
+
+    logApiResponse(`/api/orders/shopping/${orderId}/checkout`, statusCode, data, Date.now() - startTime);
 
     return NextResponse.json(
       data || {
         result: false,
-        result_code: String(remoteRes.status),
-        result_message: 'Failed to process order checkout',
+        result_code: String(statusCode),
+        result_message: errorMessage,
       },
-      { status: remoteRes.status || 400 }
+      { status: statusCode }
     );
   } catch (error: any) {
     logApiError(`/api/orders/shopping/checkout`, error);

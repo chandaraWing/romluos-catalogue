@@ -11,8 +11,10 @@ interface CatalogHeroProps {
   searchQuery: string;
   onSearchChange: (val: string) => void;
   onSearchSubmit: (e: React.FormEvent) => void;
-  activeFilterTag: FilterTag | string;
-  onSelectFilterTag: (tag: FilterTag | string) => void;
+  sortBy?: string;
+  onSortChange?: (sort: string) => void;
+  activeFilterTag?: FilterTag | string;
+  onSelectFilterTag?: (tag: FilterTag | string) => void;
   title?: string;
   subtitle?: string;
 }
@@ -23,11 +25,22 @@ export const CatalogHero: React.FC<CatalogHeroProps> = ({
   searchQuery,
   onSearchChange,
   onSearchSubmit,
+  sortBy = '',
+  onSortChange,
   activeFilterTag,
   onSelectFilterTag,
   subtitle,
 }) => {
   const displayTitle = company?.name || 'Shop';
+
+  const sortOptions = [
+    { id: '', label: '⚡ Default' },
+    { id: 'MOST_POPULAR', label: '🔥 Most Popular' },
+    { id: 'BIGGEST_DISCOUNT', label: '🏷️ Biggest Discount' },
+    { id: 'NEWEST_DEALS', label: '⭐ Newest Deals' },
+    { id: 'NEWEST_ARRIVAL', label: '✨ New Arrivals' },
+  ];
+
   return (
     <section className="relative overflow-hidden pt-4 sm:pt-6 pb-6 sm:pb-12 px-3 sm:px-6 lg:px-8 max-w-7xl mx-auto">
       <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden bg-gradient-to-b from-slate-900 to-slate-950 p-5 sm:p-10 md:p-12 lg:p-16 min-h-[280px] sm:min-h-[380px] flex flex-col justify-between shadow-2xl border border-slate-800">
@@ -43,9 +56,9 @@ export const CatalogHero: React.FC<CatalogHeroProps> = ({
 
         {/* Hero Huge Text */}
         <div className="relative z-10 text-center max-w-3xl mx-auto my-auto py-2 sm:py-4">
-         <h1 className="text-2xl xs:text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-black tracking-tight uppercase drop-shadow-2xl select-none break-words text-white">
-  {displayTitle}
-</h1>
+          <h1 className="text-2xl xs:text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-black tracking-tight uppercase drop-shadow-2xl select-none break-words text-white">
+            {displayTitle}
+          </h1>
           <p className="mt-2 text-xs sm:text-base text-slate-300 font-medium px-2 leading-relaxed">
             {subtitle || (
               <>
@@ -92,28 +105,31 @@ export const CatalogHero: React.FC<CatalogHeroProps> = ({
           </form>
         </div>
 
-        {/* Quick Tag Pills in Hero Footer */}
+        {/* Sort Option Pills in Hero Footer */}
         <div className="relative z-10 flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 pt-3 sm:pt-4">
-          {[
-            { id: 'all', label: 'All Catalog' },
-            { id: 'new', label: '🔥 New Arrivals' },
-            { id: 'best', label: '⭐ Best Sellers' },
-            { id: 'discount', label: '🏷️ Deals & Discounts' },
-            { id: 'instock', label: '📦 In Stock Ready' },
-          ].map((tag) => (
-            <button
-              key={tag.id}
-              type="button"
-              onClick={() => onSelectFilterTag(tag.id)}
-              className={`px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold backdrop-blur-md transition-all cursor-pointer ${
-                activeFilterTag === tag.id
-                  ? 'bg-brand text-slate-950 font-black shadow-lg shadow-brand/30 scale-105'
-                  : 'bg-white/10 text-slate-300 hover:bg-white/20 hover:text-white'
-              }`}
-            >
-              {tag.label}
-            </button>
-          ))}
+          {sortOptions.map((option) => {
+            const isSelected = sortBy === option.id;
+            return (
+              <button
+                key={option.id || 'default'}
+                type="button"
+                onClick={() => {
+                  if (onSortChange) {
+                    onSortChange(option.id);
+                  } else if (onSelectFilterTag) {
+                    onSelectFilterTag(option.id);
+                  }
+                }}
+                className={`px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold backdrop-blur-md transition-all cursor-pointer ${
+                  isSelected
+                    ? 'bg-brand text-slate-950 font-black shadow-lg shadow-brand/30 scale-105'
+                    : 'bg-white/10 text-slate-300 hover:bg-white/20 hover:text-white'
+                }`}
+              >
+                {option.label}
+              </button>
+            );
+          })}
         </div>
       </div>
     </section>

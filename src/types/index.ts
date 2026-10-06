@@ -183,6 +183,8 @@ export interface ProductItem {
   specifications?: Record<string, any>;
   variantGroups?: VariantOptionGroup[];
   hasVariants?: boolean;
+  is_available?: boolean;
+  isAvailable?: boolean;
   status: Status;
   isCustomPrice?: boolean;
   createdAt?: string;

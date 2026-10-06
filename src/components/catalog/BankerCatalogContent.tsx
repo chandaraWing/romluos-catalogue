@@ -1,5 +1,10 @@
 'use client';
 
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { ArrowRight, Filter, Package, RotateCcw, X } from 'lucide-react';
+import { toast } from 'sonner';
 import { BankerProductCard, BankerProductConfigModal } from '@/components/banker';
 import {
   BankerFinancingModal,
@@ -12,7 +17,7 @@ import {
   CategoryFilter,
   CategoryPills,
   PriceFilter,
-  ProductQuickViewModal
+  ProductQuickViewModal,
 } from '@/components/catalog';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { api } from '@/lib/api';
@@ -20,13 +25,8 @@ import { useAuth } from '@/lib/auth-context';
 import { useCart } from '@/lib/cart-context';
 import { formatCurrency, formatImageUrl, getPreferredLocaleName } from '@/lib/utils';
 import { BrandItem, CategoryItem, ProductItem, Role, Status } from '@/types';
-import { ArrowRight, Filter, Package, RotateCcw, X } from 'lucide-react';
-import Link from 'next/link';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { toast } from 'sonner';
 
-function BankerCatalogContent({ hash }: { hash: string }) {
+export function BankerCatalogContent({ hash }: { hash?: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { items: cartItems, addItem, totalItems, totalAmount } = useCart();
@@ -49,7 +49,7 @@ function BankerCatalogContent({ hash }: { hash: string }) {
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 3500]);
   const [maxPriceLimit, setMaxPriceLimit] = useState<number>(3500);
   const [activeFilterTag, setActiveFilterTag] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<string>(searchParams.get('sort') || 'MOST_POPULAR');
+  const [sortBy, setSortBy] = useState<string>(searchParams.get('sort') || '');
 
   // Pagination & API Fetching States
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -88,9 +88,9 @@ function BankerCatalogContent({ hash }: { hash: string }) {
 
   const checkoutItems = useMemo(() => {
     if (!checkoutBranchId) return cartItems;
-    let branchItems = cartItems.filter(i => i.branchId === checkoutBranchId);
+    let branchItems = cartItems.filter((i) => i.branchId === checkoutBranchId);
     if (checkoutItemIds.length > 0) {
-      branchItems = branchItems.filter(i => checkoutItemIds.includes(i.id || i.productId));
+      branchItems = branchItems.filter((i) => checkoutItemIds.includes(i.id || i.productId));
     }
     return branchItems;
   }, [cartItems, checkoutBranchId, checkoutItemIds]);
@@ -126,7 +126,7 @@ function BankerCatalogContent({ hash }: { hash: string }) {
           rpp: itemsPerPage,
           productTypeIds: resolvedProductTypeId,
           keyword: searchQuery.trim() || undefined,
-          sort: sortBy,
+          sort: sortBy || undefined,
         });
 
         if (res && res.length > 0) {
@@ -184,7 +184,7 @@ function BankerCatalogContent({ hash }: { hash: string }) {
 
         // Fire initial requests concurrently
         const [catalogRes, catList, prodList] = await Promise.all([
-          api.get<any>(`/api/banker-links/public/${hash}`, { cacheTtlMs: 60000 }).catch(() => null),
+          hash ? api.get<any>(`/api/banker-links/public/${hash}`, { cacheTtlMs: 60000 }).catch(() => null) : Promise.resolve(null),
           companyId ? fetchCategories(companyId).catch(() => []) : Promise.resolve([]),
           companyId
             ? fetchProducts({
@@ -193,7 +193,7 @@ function BankerCatalogContent({ hash }: { hash: string }) {
                 page: 1,
                 rpp: itemsPerPage,
                 keyword: searchQuery.trim() || undefined,
-                sort: sortBy,
+                sort: sortBy || undefined,
               }).catch(() => [] as any)
             : Promise.resolve([] as any),
         ]);
@@ -256,8 +256,8 @@ function BankerCatalogContent({ hash }: { hash: string }) {
 
           setCatalogData({
             link: {
-              id: hash,
-              hash: hash,
+              id: hash || 'DEMO',
+              hash: hash || 'DEMO',
               clickCount: 1,
               createdAt: new Date().toISOString(),
             },
@@ -276,17 +276,14 @@ function BankerCatalogContent({ hash }: { hash: string }) {
       }
     }
 
-    if (hash) {
-      initCatalogData();
-    }
+    initCatalogData();
     return () => {
       isMounted = false;
     };
-  }, [hash, fetchCategories, fetchProducts, user?.companyId, user?.branchId, partnerProfile?.default_company?.id, partnerProfile?.default_company?.default_branch?.id, user, partnerProfile, sortBy, searchQuery, itemsPerPage]);
+  }, [hash, fetchCategories, fetchProducts, user?.companyId, user?.branchId, partnerProfile?.default_company?.id, partnerProfile?.default_company?.default_branch?.id, user, partnerProfile, itemsPerPage]);
 
   // 2. Fetch page whenever currentPage, selectedCategory, sortBy, or searchQuery changes
   useEffect(() => {
-    // Avoid double fetching on initial mount while root is loading
     if (loading) return;
     loadProductsPage(currentPage);
   }, [currentPage, selectedCategory, sortBy, searchQuery, selectedBranch?.id, loadProductsPage, loading]);
@@ -328,18 +325,14 @@ function BankerCatalogContent({ hash }: { hash: string }) {
   const filteredProducts = useMemo(() => {
     return products
       .filter((product) => {
-        // Search
         if (searchQuery.trim()) {
           const q = searchQuery.toLowerCase();
           const matchName = product.name.toLowerCase().includes(q);
           const matchSku = product.sku?.toLowerCase().includes(q);
-          const matchBrand = (product.brand || product.brandRel?.name || '')
-            .toLowerCase()
-            .includes(q);
+          const matchBrand = (product.brand || product.brandRel?.name || '').toLowerCase().includes(q);
           if (!matchName && !matchSku && !matchBrand) return false;
         }
 
-        // Category Filter
         if (selectedCategory !== 'ALL') {
           const s = selectedCategory.trim().toLowerCase();
           const matchId = product.categoryId && String(product.categoryId).toLowerCase() === s;
@@ -356,25 +349,16 @@ function BankerCatalogContent({ hash }: { hash: string }) {
           if (!matchId && !matchCode && !matchName && !matchRelName && !matchFoundId) return false;
         }
 
-        // Brand Filter
         if (selectedBrand !== 'ALL') {
           const pBrand = (product.brand || product.brandRel?.name || '').toLowerCase();
           if (pBrand !== selectedBrand.toLowerCase()) return false;
         }
 
-        // Price Filter
-        const price = Number(
-          product.promotionalPrice || product.currentPrice || product.basePrice || 0
-        );
+        const price = Number(product.promotionalPrice || product.currentPrice || product.basePrice || 0);
         if (price < priceRange[0] || price > priceRange[1]) return false;
 
-        // Tag Filter
         if (activeFilterTag === 'discount' && !product.promotionalPrice) return false;
-        if (
-          activeFilterTag === 'instock' &&
-          ((product as any).inventoryCount ?? 1) <= 0
-        )
-          return false;
+        if (activeFilterTag === 'instock' && ((product as any).inventoryCount ?? 1) <= 0) return false;
 
         return true;
       })
@@ -419,7 +403,6 @@ function BankerCatalogContent({ hash }: { hash: string }) {
       });
   }, [products, categories, searchQuery, selectedCategory, selectedBrand, priceRange, activeFilterTag, sortBy]);
 
-  // Paginated Results - direct from API page payload
   const totalPages = Math.max(
     1,
     paginationInfo.pages || Math.ceil((paginationInfo.records || filteredProducts.length) / itemsPerPage)
@@ -428,12 +411,7 @@ function BankerCatalogContent({ hash }: { hash: string }) {
 
   const getCartCount = (productId: string) => {
     return cartItems
-      .filter(
-        (item) =>
-          item.productId === productId ||
-          item.id === productId ||
-          item.id?.startsWith(`${productId}_`)
-      )
+      .filter((item) => item.productId === productId || item.id === productId || item.id?.startsWith(`${productId}_`))
       .reduce((sum, item) => sum + item.quantity, 0);
   };
 
@@ -464,7 +442,6 @@ function BankerCatalogContent({ hash }: { hash: string }) {
     );
     const price = base + optionsSum;
 
-    // Generate unique ID for this cart item variant so distinct configurations don't overwrite each other
     const optionsKey =
       formattedOptions.length > 0
         ? formattedOptions.map((o) => `${o.groupName}:${o.choiceLabel}`).sort().join('|')
@@ -565,6 +542,56 @@ function BankerCatalogContent({ hash }: { hash: string }) {
     }
   };
 
+  const handleSortChange = (newSort: string) => {
+    setSortBy(newSort);
+    setCurrentPage(1);
+    if (typeof window !== 'undefined') {
+      try {
+        const url = new URL(window.location.href);
+        if (newSort) {
+          url.searchParams.set('sort', newSort);
+        } else {
+          url.searchParams.delete('sort');
+        }
+        window.history.replaceState(null, '', url.toString());
+      } catch {}
+    }
+  };
+
+  const handleSearchChange = (val: string) => {
+    setSearchQuery(val);
+    setSelectedCategory('ALL');
+    setSelectedBrand('ALL');
+    setPriceRange([0, maxPriceLimit]);
+    setActiveFilterTag('all');
+    setCurrentPage(1);
+
+    if (typeof window !== 'undefined') {
+      try {
+        const url = new URL(window.location.href);
+        if (val.trim()) {
+          url.searchParams.set('search', val.trim());
+        } else {
+          url.searchParams.delete('search');
+        }
+        url.searchParams.delete('product_type_ids');
+        url.searchParams.delete('category');
+        url.searchParams.delete('brand');
+        window.history.replaceState(null, '', url.toString());
+      } catch {}
+    }
+  };
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSelectedCategory('ALL');
+    setSelectedBrand('ALL');
+    setPriceRange([0, maxPriceLimit]);
+    setActiveFilterTag('all');
+    setCurrentPage(1);
+    loadProductsPage(1);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#FDFEFE] dark:bg-[#0B0F17] flex flex-col items-center justify-center gap-4 text-slate-900 dark:text-white">
@@ -606,17 +633,18 @@ function BankerCatalogContent({ hash }: { hash: string }) {
 
   return (
     <div className="min-h-screen bg-[#FDFEFE] dark:bg-[#0B0F17] text-slate-900 dark:text-slate-100 font-sans antialiased selection:bg-brand/20 selection:text-brand">
-      {/* 1. Banker Trust Top Ribbon */}
-      {/* <BankerTrustRibbon banker={banker} branch={currentBranch} company={company} /> */}
-
       {/* 2. Public Catalog Header */}
       <CatalogHeader
         company={company}
         branch={currentBranch}
-        homeUrl={`/${hash}`}
+        homeUrl="/"
         totalCartItems={totalItems}
         onOpenCart={() => setCartDrawerOpen(true)}
         onOpenFinancing={() => {
+          setCheckoutBranchId(String(currentBranch?.id || ''));
+          setIsFinancingModalOpen(true);
+        }}
+        onOpenReport={() => {
           setCheckoutBranchId(String(currentBranch?.id || ''));
           setIsFinancingModalOpen(true);
         }}
@@ -628,9 +656,48 @@ function BankerCatalogContent({ hash }: { hash: string }) {
           handleCategoryChange('ALL');
           setActiveFilterTag('discount');
         }}
-        onSelectBranch={(newBranch) => {
+        onSelectBranch={async (newBranch) => {
           setSelectedBranch(newBranch);
           setCheckoutBranchId(String(newBranch.id));
+          setCurrentPage(1);
+          setLoading(true);
+          try {
+            const companyId = partnerProfile?.default_company?.id || user?.companyId;
+            if (companyId) {
+              const prodList = await fetchProducts({
+                businessId: companyId,
+                branchId: newBranch.id,
+                page: 1,
+                rpp: itemsPerPage,
+                keyword: searchQuery.trim() || undefined,
+                sort: sortBy || undefined,
+              }).catch(() => []);
+              if (prodList && prodList.length > 0) {
+                setProducts(prodList);
+                const pInfo = (prodList as any)?.pagination;
+                if (pInfo) setPaginationInfo(pInfo);
+              } else {
+                setProducts([]);
+              }
+            }
+            setCatalogData((prev: any) => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                branch: {
+                  ...prev.branch,
+                  id: String(newBranch.id),
+                  name: newBranch.name,
+                  code: newBranch.code,
+                  address: newBranch.address,
+                },
+              };
+            });
+          } catch (loadErr) {
+            console.warn('Failed to refetch catalog on branch switch:', loadErr);
+          } finally {
+            setLoading(false);
+          }
         }}
         onSelectCompany={() => {
           setSelectedBranch(null);
@@ -650,7 +717,7 @@ function BankerCatalogContent({ hash }: { hash: string }) {
                 page: 1,
                 rpp: itemsPerPage,
                 keyword: searchQuery.trim() || undefined,
-                sort: sortBy,
+                sort: sortBy || undefined,
               }).catch(() => []),
             ]);
             if (catList && catList.length > 0) {
@@ -696,10 +763,10 @@ function BankerCatalogContent({ hash }: { hash: string }) {
         title={company?.name}
         branch={currentBranch}
         searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        onSearchSubmit={(e) => e.preventDefault()}
-        activeFilterTag={activeFilterTag}
-        onSelectFilterTag={setActiveFilterTag}
+        onSearchChange={handleSearchChange}
+        onSearchSubmit={handleSearchSubmit}
+        sortBy={sortBy}
+        onSortChange={handleSortChange}
       />
 
       {/* 4. Category Pills Bar */}
@@ -800,19 +867,10 @@ function BankerCatalogContent({ hash }: { hash: string }) {
                 <span className="text-slate-400">Sort by:</span>
                 <select
                   value={sortBy}
-                  onChange={(e) => {
-                    const newSort = e.target.value;
-                    setSortBy(newSort);
-                    if (typeof window !== 'undefined') {
-                      try {
-                        const url = new URL(window.location.href);
-                        url.searchParams.set('sort', newSort);
-                        window.history.replaceState(null, '', url.toString());
-                      } catch {}
-                    }
-                  }}
+                  onChange={(e) => handleSortChange(e.target.value)}
                   className="px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer"
                 >
+                  <option value="">Default</option>
                   <option value="MOST_POPULAR">Most Popular</option>
                   <option value="BIGGEST_DISCOUNT">Biggest Discount</option>
                   <option value="NEWEST_DEALS">Newest Deals</option>
@@ -821,20 +879,39 @@ function BankerCatalogContent({ hash }: { hash: string }) {
               </div>
             </div>
 
-            {/* Product Cards Grid with Live Loading State */}
+            {/* Product Cards Grid with Fast Shimmer Loading State */}
             {loadingProducts ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6 animate-pulse">
+              <div className="grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-3 gap-2.5 sm:gap-6">
                 {Array.from({ length: 6 }).map((_, i) => (
                   <div
                     key={i}
-                    className="h-80 rounded-3xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800 flex flex-col p-4 justify-between"
+                    className="bg-white dark:bg-slate-900/90 rounded-2xl overflow-hidden border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col justify-between"
                   >
-                    <div className="w-full h-44 rounded-2xl bg-slate-200 dark:bg-slate-700/60" />
-                    <div className="space-y-2">
-                      <div className="h-4 w-3/4 rounded-md bg-slate-200 dark:bg-slate-700/60" />
-                      <div className="h-3 w-1/2 rounded-md bg-slate-200 dark:bg-slate-700/60" />
+                    {/* Skeleton Image Box with Fast Shimmer */}
+                    <div className="relative h-32 xs:h-36 sm:h-48 w-full bg-slate-100 dark:bg-slate-800/80 animate-fast-shimmer overflow-hidden">
+                      <div className="absolute top-2 left-2 sm:top-3 sm:left-3 w-14 sm:w-16 h-4 sm:h-5 rounded-full bg-slate-200 dark:bg-slate-700/80" />
                     </div>
-                    <div className="h-8 w-full rounded-xl bg-slate-200 dark:bg-slate-700/60" />
+
+                    {/* Skeleton Content */}
+                    <div className="p-2.5 sm:p-5 flex-1 flex flex-col justify-between space-y-3 sm:space-y-4">
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="w-16 sm:w-20 h-3 rounded bg-slate-200 dark:bg-slate-800 animate-fast-shimmer" />
+                          <div className="w-12 h-3 rounded bg-slate-200 dark:bg-slate-800 animate-fast-shimmer hidden xs:block" />
+                        </div>
+                        <div className="w-full h-4 rounded-md bg-slate-200 dark:bg-slate-800 animate-fast-shimmer" />
+                        <div className="w-3/4 h-4 rounded-md bg-slate-200 dark:bg-slate-800 animate-fast-shimmer" />
+                      </div>
+
+                      {/* Skeleton Bottom Action */}
+                      <div className="pt-2 sm:pt-3 border-t border-slate-100 dark:border-slate-800/80 flex flex-col xs:flex-row xs:items-center justify-between gap-2">
+                        <div className="space-y-1">
+                          <div className="w-16 sm:w-20 h-4 sm:h-5 rounded-md bg-slate-200 dark:bg-slate-800 animate-fast-shimmer" />
+                          <div className="w-14 sm:w-16 h-2.5 sm:h-3 rounded bg-slate-200 dark:bg-slate-800 animate-fast-shimmer" />
+                        </div>
+                        <div className="w-full xs:w-16 sm:w-20 h-6 sm:h-8 rounded-xl bg-slate-200 dark:bg-slate-800 animate-fast-shimmer" />
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -901,11 +978,7 @@ function BankerCatalogContent({ hash }: { hash: string }) {
 
                   {Array.from({ length: totalPages }, (_, i) => i + 1)
                     .filter((pageNum) => {
-                      return (
-                        pageNum === 1 ||
-                        pageNum === totalPages ||
-                        Math.abs(pageNum - currentPage) <= 2
-                      );
+                      return pageNum === 1 || pageNum === totalPages || Math.abs(pageNum - currentPage) <= 2;
                     })
                     .map((pageNum, idx, arr) => {
                       const prevNum = arr[idx - 1];
@@ -913,9 +986,7 @@ function BankerCatalogContent({ hash }: { hash: string }) {
 
                       return (
                         <React.Fragment key={pageNum}>
-                          {hasGap && (
-                            <span className="px-1 text-xs text-slate-400 font-bold">...</span>
-                          )}
+                          {hasGap && <span className="px-1 text-xs text-slate-400 font-bold">...</span>}
                           <button
                             type="button"
                             onClick={() => {
@@ -999,7 +1070,7 @@ function BankerCatalogContent({ hash }: { hash: string }) {
           if (branchId) params.set('branchId', branchId);
           if (itemIds && itemIds.length > 0) params.set('items', itemIds.join(','));
           if (orderId) params.set('orderId', orderId);
-          params.set('backUrl', `/${hash}`);
+          params.set('backUrl', '/');
           router.push(`/checkout?${params.toString()}`);
         }}
       />
@@ -1108,22 +1179,5 @@ function BankerCatalogContent({ hash }: { hash: string }) {
         </div>
       )}
     </div>
-  );
-}
-
-export default function BranchCatalogPage() {
-  const urlParams = useParams();
-  const hash = (urlParams?.hash as string) || 'DEMO';
-
-  return (
-    <React.Suspense
-      fallback={
-        <div className="min-h-screen bg-[#FDFEFE] dark:bg-[#0B0F17] flex items-center justify-center">
-          <div className="w-8 h-8 border-2 border-brand border-t-transparent rounded-full animate-spin" />
-        </div>
-      }
-    >
-      <BankerCatalogContent hash={hash} />
-    </React.Suspense>
   );
 }
