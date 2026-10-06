@@ -18,7 +18,7 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { useCart } from '@/lib/cart-context';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, formatImageUrl, getPreferredLocaleName } from '@/lib/utils';
 import { BrandItem, CategoryItem, ProductItem, Role, Status } from '@/types';
 import { ArrowRight, Filter, Package, RotateCcw, X } from 'lucide-react';
 import Link from 'next/link';
@@ -632,6 +632,62 @@ function BankerCatalogContent({ hash }: { hash: string }) {
           setSelectedBranch(newBranch);
           setCheckoutBranchId(String(newBranch.id));
         }}
+        onSelectCompany={() => {
+          setSelectedBranch(null);
+          setCurrentPage(1);
+        }}
+        onSelectCompanyAndBranch={async (newCompany, newBranch) => {
+          setSelectedBranch(newBranch);
+          setCheckoutBranchId(String(newBranch.id));
+          setCurrentPage(1);
+          setLoading(true);
+          try {
+            const [catList, prodList] = await Promise.all([
+              fetchCategories(newCompany.id).catch(() => []),
+              fetchProducts({
+                businessId: newCompany.id,
+                branchId: newBranch.id,
+                page: 1,
+                rpp: itemsPerPage,
+                keyword: searchQuery.trim() || undefined,
+                sort: sortBy,
+              }).catch(() => []),
+            ]);
+            if (catList && catList.length > 0) {
+              setCategories(catList);
+            }
+            if (prodList && prodList.length > 0) {
+              setProducts(prodList);
+              const pInfo = (prodList as any)?.pagination;
+              if (pInfo) setPaginationInfo(pInfo);
+            }
+            const cName = getPreferredLocaleName(newCompany.name_locales) || newCompany.name || `Business ${newCompany.id}`;
+            setCatalogData((prev: any) => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                company: {
+                  ...prev.company,
+                  id: String(newCompany.id),
+                  name: cName,
+                  logo: formatImageUrl(newCompany.logo?.file_url) || prev.company?.logo,
+                },
+                branch: {
+                  ...prev.branch,
+                  id: String(newBranch.id),
+                  companyId: String(newCompany.id),
+                  name: newBranch.name,
+                  code: newBranch.code,
+                  address: newBranch.address,
+                },
+              };
+            });
+          } catch (loadErr) {
+            console.warn('Failed to refetch catalog on company & branch switch:', loadErr);
+          } finally {
+            setLoading(false);
+          }
+        }}
       />
 
       {/* 3. Hero Banner */}
@@ -805,7 +861,7 @@ function BankerCatalogContent({ hash }: { hash: string }) {
                 )}
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
+              <div className="grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-3 gap-2.5 sm:gap-6">
                 {paginatedProducts.map((product) => (
                   <BankerProductCard
                     key={product.id}

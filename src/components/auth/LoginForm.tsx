@@ -1,30 +1,28 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import { useAuth } from '@/lib/auth-context';
+import { useTheme } from '@/lib/theme-context';
 import {
-  ShieldCheck,
-  Lock,
-  Phone,
-  KeyRound,
-  ArrowRight,
-  CheckCircle2,
   AlertCircle,
+  ArrowRight,
+  Briefcase,
   Building2,
-  Sparkles,
-  RefreshCw,
-  LogOut,
-  UserCheck,
+  CheckCircle2,
   Eye,
   EyeOff,
-  Briefcase,
+  KeyRound,
+  Lock,
+  LogOut,
+  Phone,
+  RefreshCw,
+  ShieldCheck,
   User,
-  ExternalLink,
+  UserCheck
 } from 'lucide-react';
-import { useAuth } from '@/lib/auth-context';
-import { Role } from '@/types';
+import { useRouter, useSearchParams } from 'next/navigation';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
 
 interface LoginFormProps {
   redirectUrl?: string;
@@ -35,6 +33,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ redirectUrl, onSuccess }) 
   const router = useRouter();
   const searchParams = useSearchParams();
   const targetRedirect = redirectUrl || searchParams.get('redirect') || '/DEMO';
+  const { resolvedTheme } = useTheme();
 
   const {
     user,
@@ -301,12 +300,12 @@ export const LoginForm: React.FC<LoginFormProps> = ({ redirectUrl, onSuccess }) 
           <div className="space-y-2">
             <Button
               type="button"
-              variant="outline"
+              variant={resolvedTheme === 'dark' ? 'gradient-glass' : 'gradient'}
               size="lg"
               onClick={() => router.push(targetRedirect)}
               className="w-full text-sm flex items-center justify-center gap-2"
             >
-              <span>Continue to Showroom Catalog</span>
+              <span>Continue to Showroom Catalogue</span>
               <ArrowRight className="w-4 h-4" />
             </Button>
 
@@ -475,18 +474,18 @@ export const LoginForm: React.FC<LoginFormProps> = ({ redirectUrl, onSuccess }) 
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => quickFillPreset('77323315', '1234')}
+                onClick={() => quickFillPreset('77988694', '1122')}
                 className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-brand/50 bg-slate-50 dark:bg-slate-950/40 text-left transition-all group"
               >
                 <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200 block group-hover:text-brand">
-                  +855 77 323 315
+                  +855 77 988 694
                 </span>
-                <span className="text-[10px] text-slate-400">Sample Consumer</span>
+                <span className="text-[10px] text-slate-400">Multiple Company Access</span>
               </button>
 
               <button
                 type="button"
-                onClick={() => quickFillPreset('12221122', '1234')}
+                onClick={() => quickFillPreset('12221122', '2008')}
                 className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-brand/50 bg-slate-50 dark:bg-slate-950/40 text-left transition-all group"
               >
                 <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200 block group-hover:text-brand">

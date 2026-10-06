@@ -8,7 +8,7 @@ import { useAuth } from '@/lib/auth-context';
 import { CompanyInfo, BranchInfo } from './CatalogTypes';
 
 import { BranchSelector } from './BranchSelectorModal';
-import { BranchItem } from '@/types';
+import { BranchItem, PartnerBusinessItem } from '@/types';
 import { Button } from '@/components/ui/button';
 
 interface CatalogHeaderProps {
@@ -21,6 +21,8 @@ interface CatalogHeaderProps {
   onFilterDeals?: () => void;
   onFilterBestSellers?: () => void;
   onSelectBranch?: (branch: BranchItem) => void;
+  onSelectCompany?: (company: PartnerBusinessItem) => void;
+  onSelectCompanyAndBranch?: (company: PartnerBusinessItem, branch: BranchItem) => void;
 }
 
 export const CatalogHeader: React.FC<CatalogHeaderProps> = ({
@@ -33,6 +35,8 @@ export const CatalogHeader: React.FC<CatalogHeaderProps> = ({
   onFilterDeals,
   onFilterBestSellers,
   onSelectBranch,
+  onSelectCompany,
+  onSelectCompanyAndBranch,
 }) => {
   const { resolvedTheme, toggleTheme } = useTheme();
   const { user, isAuthenticated } = useAuth();
@@ -53,7 +57,7 @@ export const CatalogHeader: React.FC<CatalogHeaderProps> = ({
             {/* <div className="flex flex-col min-w-0">
               <div className="flex items-center gap-1.5">
                 <span className="font-extrabold text-sm sm:text-lg tracking-tight text-slate-900 dark:text-white group-hover:text-brand transition-colors truncate max-w-[120px] xs:max-w-[180px] sm:max-w-none">
-                  {company?.name || 'Romlus Branch Catalog'}
+                  {company?.name || 'Romluos Branch Catalog'}
                 </span>
                 <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-brand animate-pulse flex-shrink-0" title="Verified Branch Catalog" />
               </div>
@@ -97,6 +101,8 @@ export const CatalogHeader: React.FC<CatalogHeaderProps> = ({
             currentBranch={branch}
             company={company}
             onSelectBranch={onSelectBranch}
+            onSelectCompany={onSelectCompany}
+            onSelectCompanyAndBranch={onSelectCompanyAndBranch}
           />
 
           {/* Banker / Consumer Auth Indicator */}

@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     let token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : authHeader;
 
     if (!token) {
-      token = req.cookies.get('romlus_consumer_token')?.value || null;
+      token = req.cookies.get('romluos_consumer_token')?.value || null;
     }
 
     const body = await req.json();

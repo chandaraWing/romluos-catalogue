@@ -338,8 +338,8 @@ export const CartSlideOverDrawer: React.FC<CartSlideOverDrawerProps> = ({
                         res?.order_id;
 
                       if (typeof window !== 'undefined' && createdOrderId) {
-                        localStorage.setItem('romlus_active_draft_order_id', createdOrderId);
-                        localStorage.setItem('romlus_active_draft_order', JSON.stringify(draftOrder));
+                        localStorage.setItem('romluos_active_draft_order_id', createdOrderId);
+                        localStorage.setItem('romluos_active_draft_order', JSON.stringify(draftOrder));
                       }
                     } catch (apiErr) {
                       console.warn('API error creating draft order, fallback to local flow:', apiErr);

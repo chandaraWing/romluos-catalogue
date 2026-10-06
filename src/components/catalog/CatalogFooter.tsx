@@ -28,7 +28,7 @@ export const CatalogFooter: React.FC<CatalogFooterProps> = ({ company, branch, b
                 />
               </div>
               <span className="font-extrabold text-base text-slate-900 dark:text-white">
-                {company?.name || 'Romlus Platform'}
+                {company?.name || 'Romluos Platform'}
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm leading-relaxed">
@@ -84,7 +84,7 @@ export const CatalogFooter: React.FC<CatalogFooterProps> = ({ company, branch, b
 
         <div className="mt-10 pt-6 border-t border-slate-100 dark:border-slate-800/60 flex flex-col sm:flex-row items-center justify-between text-[11px] text-slate-400 gap-4">
           <div>
-            © {new Date().getFullYear()} {company?.name || 'Romlus'}. All rights reserved.
+            © {new Date().getFullYear()} {company?.name || 'Romluos'}. All rights reserved.
           </div>
           {hash && (
             <div className="font-mono text-[10px] text-slate-500">

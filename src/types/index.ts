@@ -80,6 +80,32 @@ export interface PartnerUserProfile {
   default_company?: PartnerUserCompany;
 }
 
+export interface PartnerBusinessLogo {
+  id?: string;
+  file_url?: string;
+  file_name?: string;
+  file_type?: string;
+  ref_type?: string;
+  ref_id?: string;
+}
+
+export interface PartnerBusinessItem {
+  id: string;
+  status: string;
+  logo?: PartnerBusinessLogo | null;
+  name_locales: PartnerLocaleName[];
+  branch_count: number;
+  name?: string;
+}
+
+export interface PartnerBusinessesResponse {
+  result: boolean;
+  result_code: string;
+  result_message: string;
+  trace_id?: string;
+  body: PartnerBusinessItem[];
+}
+
 export interface PartnerProfileResponse {
   result: boolean;
   result_code: string;

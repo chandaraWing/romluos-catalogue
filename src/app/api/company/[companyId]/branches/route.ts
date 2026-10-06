@@ -46,8 +46,8 @@ export async function GET(
         searchParams.get('access_token') ||
         searchParams.get('district_banker_token') ||
         searchParams.get('token') ||
-        req.cookies.get('romlus_district_banker_token')?.value ||
-        req.cookies.get('romlus_auth_token')?.value ||
+        req.cookies.get('romluos_district_banker_token')?.value ||
+        req.cookies.get('romluos_auth_token')?.value ||
         null;
     }
 

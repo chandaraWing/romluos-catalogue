@@ -37,7 +37,7 @@ export const CatalogProductCard: React.FC<CatalogProductCardProps> = ({
     product.image ||
     'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop';
 
-  const brandName = product.brand || 'Romlus';
+  const brandName = product.brand || 'Romluos';
 
   const prefetchProductDetail = useCallback(() => {
     if (!product?.id || !product?.branchId) return;

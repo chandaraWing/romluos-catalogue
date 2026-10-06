@@ -24,7 +24,7 @@ export async function POST(
     let token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : authHeader;
 
     if (!token) {
-      token = req.cookies.get('romlus_consumer_token')?.value || null;
+      token = req.cookies.get('romluos_consumer_token')?.value || null;
     }
 
     logApiRequest('POST', `/api/orders/shopping/${orderId}/update`, {

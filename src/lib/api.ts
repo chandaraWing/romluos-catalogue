@@ -37,18 +37,18 @@ class ApiClient {
 
     if (isConsumerEndpoint) {
       const consumerToken =
-        this.extractToken(localStorage.getItem('romlus_consumer_token')) ||
-        this.extractToken(localStorage.getItem('romlus_consumer_session')) ||
-        this.extractToken(localStorage.getItem('romlus_auth_token')) ||
-        this.extractToken(localStorage.getItem('romlus_district_banker_token'));
+        this.extractToken(localStorage.getItem('romluos_consumer_token')) ||
+        this.extractToken(localStorage.getItem('romluos_consumer_session')) ||
+        this.extractToken(localStorage.getItem('romluos_auth_token')) ||
+        this.extractToken(localStorage.getItem('romluos_district_banker_token'));
       return consumerToken;
     }
 
     return (
-      this.extractToken(localStorage.getItem('romlus_auth_token')) ||
-      this.extractToken(localStorage.getItem('romlus_district_banker_token')) ||
-      this.extractToken(localStorage.getItem('romlus_district_banker_session')) ||
-      this.extractToken(localStorage.getItem('romlus_consumer_token'))
+      this.extractToken(localStorage.getItem('romluos_auth_token')) ||
+      this.extractToken(localStorage.getItem('romluos_district_banker_token')) ||
+      this.extractToken(localStorage.getItem('romluos_district_banker_session')) ||
+      this.extractToken(localStorage.getItem('romluos_consumer_token'))
     );
   }
 

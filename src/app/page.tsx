@@ -75,7 +75,7 @@ export default function HomePage() {
             </div>
             <div className="min-w-0">
               <span className="font-extrabold text-sm sm:text-base tracking-tight text-white flex items-center gap-1.5 truncate">
-                ROMLUS <span className="text-brand font-medium text-[10px] sm:text-xs">BRANCH CATALOG</span>
+                ROMLUOS <span className="text-brand font-medium text-[10px] sm:text-xs">BRANCH CATALOG</span>
               </span>
               <p className="text-[9px] sm:text-[10px] text-slate-400 font-medium truncate">
                 District Banker & Showroom Direct Portal
@@ -240,7 +240,7 @@ export default function HomePage() {
 
       {/* Simple Footer */}
       <footer className="border-t border-slate-800/80 py-8 mt-20 text-center text-xs text-slate-500">
-        <p>© 2026 Romlus Retail Financial Technologies. All rights reserved.</p>
+        <p>© 2026 Romluos Retail Financial Technologies. All rights reserved.</p>
       </footer>
     </div>
   );

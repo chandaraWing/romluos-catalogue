@@ -52,7 +52,7 @@ export const BankerProductCard: React.FC<BankerProductCardProps> = ({
       className="bg-white dark:bg-slate-900/90 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group cursor-pointer"
     >
       {/* Product Image & Badges */}
-      <div className="relative h-48 w-full bg-slate-50 dark:bg-slate-950 overflow-hidden">
+      <div className="relative h-32 xs:h-36 sm:h-48 w-full bg-slate-50 dark:bg-slate-950 overflow-hidden">
         {product.images?.[0] || product.image ? (
           <img
             src={product.images?.[0] || product.image}
@@ -61,38 +61,37 @@ export const BankerProductCard: React.FC<BankerProductCardProps> = ({
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-slate-400">
-            <Package className="w-12 h-12 stroke-[1.5]" />
+            <Package className="w-10 h-10 sm:w-12 sm:h-12 stroke-[1.5]" />
           </div>
         )}
 
-        <div className="absolute top-3 left-3 flex items-center gap-1.5">
-          <span className="px-2 py-0.5 rounded-full bg-white/90 dark:bg-slate-950/80 backdrop-blur-md border border-slate-200 dark:border-slate-700/50 text-[10px] font-bold text-slate-900 dark:text-slate-200 shadow-xs">
-            {product.brand || 'Romlus'}
+        <div className="absolute top-2 left-2 sm:top-3 sm:left-3 flex items-center gap-1.5">
+          <span className="px-1.5 py-0.5 sm:px-2 sm:py-0.5 rounded-full bg-white/90 dark:bg-slate-950/80 backdrop-blur-md border border-slate-200 dark:border-slate-700/50 text-[9px] sm:text-[10px] font-bold text-slate-900 dark:text-slate-200 shadow-xs">
+            {product.brand || 'Romluos'}
           </span>
         </div>
-
       </div>
 
       {/* Product Content */}
-      <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
+      <div className="p-2.5 sm:p-5 flex-1 flex flex-col justify-between space-y-2.5 sm:space-y-4">
         <div>
-          <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mb-1">
-            <span>SKU: {product.sku || 'N/A'}</span>
-            <span>24m Financing</span>
+          <div className="flex items-center justify-between text-[9px] sm:text-[11px] text-slate-500 dark:text-slate-400 mb-0.5 sm:mb-1">
+            <span className="truncate max-w-[60px] sm:max-w-none">SKU: {product.sku || 'N/A'}</span>
+            <span className="hidden xs:inline">24m Financing</span>
           </div>
 
-          <h3 className="font-bold text-slate-900 dark:text-white text-base leading-snug group-hover:text-brand-lime transition-colors line-clamp-2">
+          <h3 className="font-bold text-slate-900 dark:text-white text-xs sm:text-base leading-snug group-hover:text-brand-lime transition-colors line-clamp-2">
             {product.name}
           </h3>
         </div>
 
         {/* Pricing & Add Action */}
-        <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <div className="pt-2 sm:pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-col xs:flex-row xs:items-center justify-between gap-1.5 sm:gap-2">
           <div>
-            <div className="text-base font-black text-slate-900 dark:text-white">
+            <div className="text-xs sm:text-base font-black text-slate-900 dark:text-white leading-tight">
               {formatCurrency(displayPrice)}
             </div>
-            <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
+            <div className="text-[9px] sm:text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold leading-tight">
               Est: {formatCurrency((displayPrice * 0.9 * 1.052) / 24)}/mo
             </div>
           </div>
@@ -103,18 +102,18 @@ export const BankerProductCard: React.FC<BankerProductCardProps> = ({
             variant={inCartCount > 0 ? 'secondary-glass' : 'gradient-glass'}
             onClick={handleButtonClick}
             disabled={!isAvailable}
-            className="text-xs font-bold gap-1.5"
+            className="text-[10px] sm:text-xs font-bold gap-1 sm:gap-1.5 h-auto py-1 sm:py-2 px-2 sm:px-3 w-full xs:w-auto"
           >
             {inCartCount > 0 ? (
               <>
-                <CheckCircle2 className="w-3.5 h-3.5 text-secondary" />
-                <span className="text-secondary">Selected ({inCartCount})</span>
+                <CheckCircle2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-secondary shrink-0" />
+                <span className="text-secondary truncate">({inCartCount})</span>
               </>
             ) : (
               <>
-                <Sparkles className="w-3.5 h-3.5 text-white dark:text-secondary" />
-                <span className="text-white dark:bg-gradient-to-r dark:via-brand-300 dark:from-brand-blue-600 dark:to-primary dark:bg-clip-text dark:text-transparent font-extrabold">
-                  Select Option
+                <Sparkles className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white dark:text-secondary shrink-0" />
+                <span className="text-white dark:bg-gradient-to-r dark:via-brand-300 dark:from-brand-blue-600 dark:to-primary dark:bg-clip-text dark:text-transparent font-extrabold truncate">
+                  Select
                 </span>
               </>
             )}

@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
         searchParams.get('access_token') ||
         searchParams.get('consumer_token') ||
         searchParams.get('token') ||
-        req.cookies.get('romlus_consumer_token')?.value ||
+        req.cookies.get('romluos_consumer_token')?.value ||
         null;
     }
 

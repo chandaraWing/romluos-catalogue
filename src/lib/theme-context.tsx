@@ -18,7 +18,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('light');
 
   useEffect(() => {
-    const saved = localStorage.getItem('romlus_theme') as Theme | null;
+    const saved = localStorage.getItem('romluos_theme') as Theme | null;
     if (saved) {
       setTheme(saved);
     }
@@ -45,7 +45,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       root.classList.remove('dark');
     }
 
-    localStorage.setItem('romlus_theme', theme);
+    localStorage.setItem('romluos_theme', theme);
   }, [theme]);
 
   const toggleTheme = () => {

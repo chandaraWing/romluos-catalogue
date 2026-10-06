@@ -2,9 +2,8 @@
 
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth-context';
-import { BranchItem } from '@/types';
+import { BranchItem, PartnerBusinessItem } from '@/types';
 import {
-  Building2,
   CheckCircle2,
   ChevronDown,
   MapPin,
@@ -12,23 +11,28 @@ import {
   Search,
   ShieldCheck,
   Store,
-  X,
+  X
 } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { BranchInfo, CompanyInfo } from './CatalogTypes';
+import { CompanySelector } from './CompanySelectorModal';
 
 interface BranchSelectorProps {
   currentBranch?: BranchInfo | null;
   company?: CompanyInfo | null;
   onSelectBranch?: (branch: BranchItem) => void;
+  onSelectCompany?: (company: PartnerBusinessItem) => void;
+  onSelectCompanyAndBranch?: (company: PartnerBusinessItem, branch: BranchItem) => void;
 }
 
 export const BranchSelector: React.FC<BranchSelectorProps> = ({
   currentBranch,
   company,
   onSelectBranch,
+  onSelectCompany,
+  onSelectCompanyAndBranch,
 }) => {
   const { user, districtBankerToken, partnerProfile, switchBranch, fetchBranches } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
@@ -83,11 +87,6 @@ export const BranchSelector: React.FC<BranchSelectorProps> = ({
     branches.find((b) => String(b.id) === String(activeBranchId))?.name ||
     'Select Branch';
 
-  const selectedBranchCode =
-    currentBranch?.code ||
-    branches.find((b) => String(b.id) === String(activeBranchId))?.code ||
-    '';
-
   const handleSelect = (b: BranchItem) => {
     if (switchBranch) {
       switchBranch(b);
@@ -96,7 +95,7 @@ export const BranchSelector: React.FC<BranchSelectorProps> = ({
       onSelectBranch(b);
     }
     if (typeof window !== 'undefined') {
-      localStorage.setItem('romlus_selected_branch', JSON.stringify(b));
+      localStorage.setItem('romluos_selected_branch', JSON.stringify(b));
     }
     toast.success(`Active branch switched to ${b.name}`);
     setIsOpen(false);
@@ -111,40 +110,14 @@ export const BranchSelector: React.FC<BranchSelectorProps> = ({
     );
   });
 
-  const companyDisplayName =
-    company?.name ||
-    user?.companyName ||
-    (partnerProfile?.default_company?.locales && partnerProfile.default_company.locales.length > 0
-      ? partnerProfile.default_company.locales[0].name
-      : '') ||
-    'Authorized Partner';
-
-  const companyLogo = company?.logo;
-
   return (
     <div className="relative flex items-center gap-1.5 sm:gap-2">
-      {/* Company Name & Logo Label */}
-      <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 sm:py-1.5 rounded-xl bg-slate-100/90 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/80 text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-sm">
-        {companyLogo ? (
-          <img
-            src={companyLogo}
-            alt={companyDisplayName}
-            className="w-4 h-4 object-contain rounded shrink-0"
-          />
-        ) : (
-          <div className="w-5 h-5 rounded-lg bg-brand-blue/15 text-brand-blue-500 dark:text-brand-blue-400 flex items-center justify-center shrink-0">
-            <Building2 className="w-3 h-3 text-brand-blue-500 dark:text-brand-blue-400" />
-          </div>
-        )}
-        <div className="flex flex-col text-left">
-          <span className="text-[9px] text-slate-400 font-normal leading-none hidden lg:block">
-            Company
-          </span>
-          <span className="font-bold text-[11px] sm:text-xs text-slate-900 dark:text-white truncate max-w-[80px] lg:max-w-[130px] leading-tight">
-            {companyDisplayName}
-          </span>
-        </div>
-      </div>
+      {/* Interactive Company Selector Dropdown / Modal */}
+      <CompanySelector
+        currentCompany={company}
+        onSelectCompany={onSelectCompany}
+        onSelectCompanyAndBranch={onSelectCompanyAndBranch}
+      />
 
       {/* Switch Branch Trigger Button */}
       <Button

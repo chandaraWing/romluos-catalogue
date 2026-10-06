@@ -9,11 +9,11 @@ import axios, {
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://qa.wingmall.com';
 
 export const STORAGE_KEYS = {
-  CONSUMER_TOKEN: 'romlus_consumer_token',
-  CONSUMER_SESSION: 'romlus_consumer_session',
-  DISTRICT_BANKER_TOKEN: 'romlus_district_banker_token',
-  DISTRICT_BANKER_SESSION: 'romlus_district_banker_session',
-  ACTIVE_TOKEN: 'romlus_auth_token',
+  CONSUMER_TOKEN: 'romluos_consumer_token',
+  CONSUMER_SESSION: 'romluos_consumer_session',
+  DISTRICT_BANKER_TOKEN: 'romluos_district_banker_token',
+  DISTRICT_BANKER_SESSION: 'romluos_district_banker_session',
+  ACTIVE_TOKEN: 'romluos_auth_token',
 } as const;
 
 /**

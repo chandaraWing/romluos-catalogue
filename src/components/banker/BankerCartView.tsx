@@ -74,7 +74,7 @@ export const BankerCartView: React.FC<BankerCartViewProps> = ({
     if (urlOrderId) {
       setActiveOrderId(urlOrderId);
     } else if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('romlus_active_draft_order_id');
+      const stored = localStorage.getItem('romluos_active_draft_order_id');
       if (stored) setActiveOrderId(stored);
     }
   }, [urlOrderId]);
@@ -244,7 +244,7 @@ export const BankerCartView: React.FC<BankerCartViewProps> = ({
     () => user?.phone || '+855 12 345 678'
   );
   const [customerEmail, setCustomerEmail] = useState(
-    () => user?.email || 'customer@romlus.com'
+    () => user?.email || 'customer@romluos.com'
   );
   const [notes, setNotes] = useState(
     '24-month device financing package with showroom stock reservation'
@@ -349,7 +349,7 @@ export const BankerCartView: React.FC<BankerCartViewProps> = ({
 
       displayItems.forEach((i) => removeItem(i.id || i.productId));
       if (typeof window !== 'undefined') {
-        localStorage.removeItem('romlus_active_draft_order_id');
+        localStorage.removeItem('romluos_active_draft_order_id');
       }
     } catch (err: any) {
       if (popupTab && !popupTab.closed) popupTab.close();

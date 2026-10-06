@@ -161,7 +161,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [downPaymentRate, setDownPaymentRate] = useState<number>(0.1); // Default 10%
 
   useEffect(() => {
-    const saved = localStorage.getItem('romlus_branch_cart');
+    const saved = localStorage.getItem('romluos_branch_cart');
     if (saved) {
       try {
         setItems(JSON.parse(saved));
@@ -173,7 +173,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const saveItems = (newItems: CartItem[]) => {
     setItems(newItems);
-    localStorage.setItem('romlus_branch_cart', JSON.stringify(newItems));
+    localStorage.setItem('romluos_branch_cart', JSON.stringify(newItems));
   };
 
   const getItemKey = (item: CartItem): string => {
@@ -208,7 +208,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const removeItem = useCallback((targetId: string) => {
     setItems((prev) => {
       const filtered = prev.filter((i) => (i.id ? i.id !== targetId : i.productId !== targetId));
-      localStorage.setItem('romlus_branch_cart', JSON.stringify(filtered));
+      localStorage.setItem('romluos_branch_cart', JSON.stringify(filtered));
       return filtered;
     });
   }, []);
@@ -226,7 +226,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         return i;
       });
-      localStorage.setItem('romlus_branch_cart', JSON.stringify(updated));
+      localStorage.setItem('romluos_branch_cart', JSON.stringify(updated));
       return updated;
     });
   }, [removeItem]);

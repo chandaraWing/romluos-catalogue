@@ -40,9 +40,9 @@ class MemoryCache {
 }
 
 // Global server-side cache singleton
-const globalServerCache = (globalThis as any).__romlus_server_cache || new MemoryCache();
+const globalServerCache = (globalThis as any).__romluos_server_cache || new MemoryCache();
 if (process.env.NODE_ENV !== 'production') {
-  (globalThis as any).__romlus_server_cache = globalServerCache;
+  (globalThis as any).__romluos_server_cache = globalServerCache;
 }
 
 export const serverCache: MemoryCache = globalServerCache;

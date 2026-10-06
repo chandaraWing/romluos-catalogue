@@ -9,7 +9,7 @@ import { Toaster } from '@/components/ui/sonner';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Branch Catalog & District Banker Financing Portal | Romlus',
+  title: 'Branch Catalog & District Banker Financing Portal | Romluos',
   description: 'Verified showroom branch electronics catalog, real-time inventory levels, custom banker loan terms, and QR code financing.',
 };
 
