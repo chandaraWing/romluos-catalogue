@@ -22,6 +22,8 @@ export async function GET(req: NextRequest) {
     const branchIds = searchParams.get('branch_ids') || searchParams.get('branch_id');
     const sort = searchParams.get('sort');
     const keyword = searchParams.get('keyword') || searchParams.get('search') || searchParams.get('q');
+    const minPrice = searchParams.get('min_price') || searchParams.get('minPrice');
+    const maxPrice = searchParams.get('max_price') || searchParams.get('maxPrice');
     const productTypeIds =
       searchParams.get('product_type_ids') ||
       searchParams.get('product_type_id') ||
@@ -34,6 +36,8 @@ export async function GET(req: NextRequest) {
       categoryFilter: productTypeIds,
       keyword,
       sort,
+      minPrice,
+      maxPrice,
       page,
       rpp,
     });
@@ -58,7 +62,7 @@ export async function GET(req: NextRequest) {
         null;
     }
 
-    const cacheKey = `products:${businessIds}:${branchIds || 'all'}:${serviceTypes}:${page}:${rpp}:${productTypeIds || 'all'}:${sort || 'default'}:${keyword || 'none'}`;
+    const cacheKey = `products:${businessIds}:${branchIds || 'all'}:${serviceTypes}:${page}:${rpp}:${productTypeIds || 'all'}:${sort || 'default'}:${keyword || 'none'}:${minPrice || 'min'}:${maxPrice || 'max'}`;
     const cachedResponse = serverCache.get<any>(cacheKey);
     if (cachedResponse) {
       return NextResponse.json(cachedResponse, {
@@ -69,7 +73,7 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    let targetUrl = `${SHOP_BASE_URL}/marketplace/v1/consumer/products/search?page=${page}&rpp=${rpp}&service_types=${serviceTypes}&business_ids=${businessIds}&is_add_recent_search=false`;
+    let targetUrl = `${SHOP_BASE_URL}/marketplace/v1/consumer/products/search?page=${page}&rpp=${rpp}&service_types=${serviceTypes}&business_ids=${businessIds}&is_add_recent_search=false&is_bnpl=true`;
     if (branchIds && branchIds !== 'undefined') {
       targetUrl += `&branch_ids=${branchIds}`;
     }
@@ -78,6 +82,12 @@ export async function GET(req: NextRequest) {
     }
     if (keyword && keyword.trim()) {
       targetUrl += `&search=${encodeURIComponent(keyword.trim())}&keyword=${encodeURIComponent(keyword.trim())}`;
+    }
+    if (minPrice && !isNaN(Number(minPrice))) {
+      targetUrl += `&min_price=${encodeURIComponent(minPrice)}`;
+    }
+    if (maxPrice && !isNaN(Number(maxPrice))) {
+      targetUrl += `&max_price=${encodeURIComponent(maxPrice)}`;
     }
     if (sort) {
       targetUrl += `&sort=${encodeURIComponent(sort)}`;

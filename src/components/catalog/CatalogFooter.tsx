@@ -84,7 +84,7 @@ export const CatalogFooter: React.FC<CatalogFooterProps> = ({ company, branch, b
 
         <div className="mt-10 pt-6 border-t border-slate-100 dark:border-slate-800/60 flex flex-col sm:flex-row items-center justify-between text-[11px] text-slate-400 gap-4">
           <div>
-            © {new Date().getFullYear()} {company?.name || 'Romluos'}. All rights reserved.
+            © {new Date().getFullYear()} Romluos. All rights reserved.
           </div>
           {hash && (
             <div className="font-mono text-[10px] text-slate-500">

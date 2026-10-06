@@ -42,12 +42,73 @@ export function BankerCatalogContent({ hash }: { hash?: string }) {
 
   // Filter States
   const [searchQuery, setSearchQuery] = useState<string>(searchParams.get('search') || '');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState<string>(searchParams.get('search') || '');
+
+  // 800ms debounce for product search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Sync debounced search query to URL search params
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const url = new URL(window.location.href);
+        if (debouncedSearchQuery.trim()) {
+          url.searchParams.set('search', debouncedSearchQuery.trim());
+        } else {
+          url.searchParams.delete('search');
+        }
+        window.history.replaceState(null, '', url.toString());
+      } catch {}
+    }
+  }, [debouncedSearchQuery]);
+
   const [selectedCategory, setSelectedCategory] = useState<string>(
     searchParams.get('product_type_ids') || searchParams.get('category') || 'ALL'
   );
   const [selectedBrand, setSelectedBrand] = useState<string>(searchParams.get('brand') || 'ALL');
-  const [priceRange, setPriceRange] = useState<[number, number]>([0, 3500]);
+
+  const initialMinPrice = searchParams.get('min_price') || searchParams.get('minPrice');
+  const initialMaxPrice = searchParams.get('max_price') || searchParams.get('maxPrice');
+  const parsedMin = initialMinPrice && !isNaN(Number(initialMinPrice)) ? Number(initialMinPrice) : 0;
+  const parsedMax = initialMaxPrice && !isNaN(Number(initialMaxPrice)) ? Number(initialMaxPrice) : 3500;
+
+  const [priceRange, setPriceRange] = useState<[number, number]>([parsedMin, parsedMax]);
+  const [debouncedPriceRange, setDebouncedPriceRange] = useState<[number, number]>([parsedMin, parsedMax]);
   const [maxPriceLimit, setMaxPriceLimit] = useState<number>(3500);
+
+  // 500ms debounce for price range updates
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedPriceRange(priceRange);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [priceRange]);
+
+  // Sync debounced price range to URL search params
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const url = new URL(window.location.href);
+        if (debouncedPriceRange[0] > 0) {
+          url.searchParams.set('min_price', String(debouncedPriceRange[0]));
+        } else {
+          url.searchParams.delete('min_price');
+        }
+        if (debouncedPriceRange[1] < maxPriceLimit) {
+          url.searchParams.set('max_price', String(debouncedPriceRange[1]));
+        } else {
+          url.searchParams.delete('max_price');
+        }
+        window.history.replaceState(null, '', url.toString());
+      } catch {}
+    }
+  }, [debouncedPriceRange, maxPriceLimit]);
+
   const [activeFilterTag, setActiveFilterTag] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>(searchParams.get('sort') || '');
 
@@ -125,8 +186,10 @@ export function BankerCatalogContent({ hash }: { hash?: string }) {
           page: pageToFetch,
           rpp: itemsPerPage,
           productTypeIds: resolvedProductTypeId,
-          keyword: searchQuery.trim() || undefined,
+          keyword: debouncedSearchQuery.trim() || undefined,
           sort: sortBy || undefined,
+          minPrice: debouncedPriceRange[0] > 0 ? debouncedPriceRange[0] : undefined,
+          maxPrice: debouncedPriceRange[1] < maxPriceLimit ? debouncedPriceRange[1] : undefined,
         });
 
         if (res && res.length > 0) {
@@ -135,8 +198,9 @@ export function BankerCatalogContent({ hash }: { hash?: string }) {
             ...res.map((p: any) => Number(p.currentPrice || p.basePrice || 0))
           );
           const roundedMax = Math.ceil((maxP || 1000) / 100) * 100;
-          setMaxPriceLimit(roundedMax > 500 ? roundedMax : 3500);
-          setPriceRange((prev) => (prev[1] === 3500 ? [0, roundedMax > 500 ? roundedMax : 3500] : prev));
+          if (roundedMax > maxPriceLimit) {
+            setMaxPriceLimit(roundedMax);
+          }
         } else {
           setProducts([]);
         }
@@ -164,8 +228,10 @@ export function BankerCatalogContent({ hash }: { hash?: string }) {
       selectedBranch?.id,
       selectedCategory,
       categories,
-      searchQuery,
+      debouncedSearchQuery,
       sortBy,
+      debouncedPriceRange,
+      maxPriceLimit,
       fetchProducts,
       itemsPerPage,
     ]
@@ -282,11 +348,11 @@ export function BankerCatalogContent({ hash }: { hash?: string }) {
     };
   }, [hash, fetchCategories, fetchProducts, user?.companyId, user?.branchId, partnerProfile?.default_company?.id, partnerProfile?.default_company?.default_branch?.id, user, partnerProfile, itemsPerPage]);
 
-  // 2. Fetch page whenever currentPage, selectedCategory, sortBy, or searchQuery changes
+  // 2. Fetch page whenever currentPage, selectedCategory, sortBy, debouncedSearchQuery, or debouncedPriceRange changes
   useEffect(() => {
     if (loading) return;
     loadProductsPage(currentPage);
-  }, [currentPage, selectedCategory, sortBy, searchQuery, selectedBranch?.id, loadProductsPage, loading]);
+  }, [currentPage, selectedCategory, sortBy, debouncedSearchQuery, debouncedPriceRange, selectedBranch?.id, loadProductsPage, loading]);
 
   // Dynamic Brand Aggregation
   const companyBrands = useMemo<BrandFilterItem[]>(() => {
@@ -325,8 +391,8 @@ export function BankerCatalogContent({ hash }: { hash?: string }) {
   const filteredProducts = useMemo(() => {
     return products
       .filter((product) => {
-        if (searchQuery.trim()) {
-          const q = searchQuery.toLowerCase();
+        if (debouncedSearchQuery.trim()) {
+          const q = debouncedSearchQuery.toLowerCase();
           const matchName = product.name.toLowerCase().includes(q);
           const matchSku = product.sku?.toLowerCase().includes(q);
           const matchBrand = (product.brand || product.brandRel?.name || '').toLowerCase().includes(q);
@@ -401,7 +467,7 @@ export function BankerCatalogContent({ hash }: { hash?: string }) {
         if (sortBy === 'price-high') return pB - pA;
         return 0;
       });
-  }, [products, categories, searchQuery, selectedCategory, selectedBrand, priceRange, activeFilterTag, sortBy]);
+  }, [products, categories, debouncedSearchQuery, selectedCategory, selectedBrand, priceRange, activeFilterTag, sortBy]);
 
   const totalPages = Math.max(
     1,
@@ -488,20 +554,36 @@ export function BankerCatalogContent({ hash }: { hash?: string }) {
 
   const isAnyFilterActive = useMemo(() => {
     return (
-      searchQuery.trim() !== '' ||
+      debouncedSearchQuery.trim() !== '' ||
       selectedCategory !== 'ALL' ||
       selectedBrand !== 'ALL' ||
       priceRange[0] > 0 ||
       priceRange[1] < maxPriceLimit ||
       activeFilterTag !== 'all'
     );
-  }, [searchQuery, selectedCategory, selectedBrand, priceRange, maxPriceLimit, activeFilterTag]);
+  }, [debouncedSearchQuery, selectedCategory, selectedBrand, priceRange, maxPriceLimit, activeFilterTag]);
+
+  const handleResetPrice = () => {
+    setPriceRange([0, maxPriceLimit]);
+    setDebouncedPriceRange([0, maxPriceLimit]);
+    setCurrentPage(1);
+    if (typeof window !== 'undefined') {
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('min_price');
+        url.searchParams.delete('max_price');
+        window.history.replaceState(null, '', url.toString());
+      } catch {}
+    }
+  };
 
   const handleResetAllFilters = () => {
     setSearchQuery('');
+    setDebouncedSearchQuery('');
     setSelectedCategory('ALL');
     setSelectedBrand('ALL');
     setPriceRange([0, maxPriceLimit]);
+    setDebouncedPriceRange([0, maxPriceLimit]);
     setActiveFilterTag('all');
     setCurrentPage(1);
 
@@ -512,6 +594,8 @@ export function BankerCatalogContent({ hash }: { hash?: string }) {
         url.searchParams.delete('product_type_ids');
         url.searchParams.delete('category');
         url.searchParams.delete('brand');
+        url.searchParams.delete('min_price');
+        url.searchParams.delete('max_price');
         window.history.replaceState(null, '', url.toString());
       } catch {}
     }
@@ -560,30 +644,19 @@ export function BankerCatalogContent({ hash }: { hash?: string }) {
 
   const handleSearchChange = (val: string) => {
     setSearchQuery(val);
+    if (!val.trim()) {
+      setDebouncedSearchQuery('');
+    }
     setSelectedCategory('ALL');
     setSelectedBrand('ALL');
     setPriceRange([0, maxPriceLimit]);
     setActiveFilterTag('all');
     setCurrentPage(1);
-
-    if (typeof window !== 'undefined') {
-      try {
-        const url = new URL(window.location.href);
-        if (val.trim()) {
-          url.searchParams.set('search', val.trim());
-        } else {
-          url.searchParams.delete('search');
-        }
-        url.searchParams.delete('product_type_ids');
-        url.searchParams.delete('category');
-        url.searchParams.delete('brand');
-        window.history.replaceState(null, '', url.toString());
-      } catch {}
-    }
   };
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setDebouncedSearchQuery(searchQuery);
     setSelectedCategory('ALL');
     setSelectedBrand('ALL');
     setPriceRange([0, maxPriceLimit]);
@@ -669,7 +742,7 @@ export function BankerCatalogContent({ hash }: { hash?: string }) {
                 branchId: newBranch.id,
                 page: 1,
                 rpp: itemsPerPage,
-                keyword: searchQuery.trim() || undefined,
+                keyword: debouncedSearchQuery.trim() || undefined,
                 sort: sortBy || undefined,
               }).catch(() => []);
               if (prodList && prodList.length > 0) {
@@ -716,7 +789,7 @@ export function BankerCatalogContent({ hash }: { hash?: string }) {
                 branchId: newBranch.id,
                 page: 1,
                 rpp: itemsPerPage,
-                keyword: searchQuery.trim() || undefined,
+                keyword: debouncedSearchQuery.trim() || undefined,
                 sort: sortBy || undefined,
               }).catch(() => []),
             ]);
@@ -828,8 +901,11 @@ export function BankerCatalogContent({ hash }: { hash?: string }) {
                 <PriceFilter
                   priceRange={priceRange}
                   maxPriceLimit={maxPriceLimit}
-                  onChangePriceRange={setPriceRange}
-                  onResetPrice={() => setPriceRange([0, maxPriceLimit])}
+                  onChangePriceRange={(range) => {
+                    setPriceRange(range);
+                    setCurrentPage(1);
+                  }}
+                  onResetPrice={handleResetPrice}
                 />
               </div>
             </div>
@@ -1161,8 +1237,11 @@ export function BankerCatalogContent({ hash }: { hash?: string }) {
                 <PriceFilter
                   priceRange={priceRange}
                   maxPriceLimit={maxPriceLimit}
-                  onChangePriceRange={setPriceRange}
-                  onResetPrice={() => setPriceRange([0, maxPriceLimit])}
+                  onChangePriceRange={(range) => {
+                    setPriceRange(range);
+                    setCurrentPage(1);
+                  }}
+                  onResetPrice={handleResetPrice}
                 />
               </div>
             </div>

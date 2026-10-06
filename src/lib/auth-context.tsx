@@ -81,6 +81,8 @@ interface AuthContextValue {
     productTypeIds?: string;
     keyword?: string;
     sort?: string;
+    minPrice?: number;
+    maxPrice?: number;
   }) => Promise<ProductItem[] & { pagination?: { page: number; pages: number; records: number } }>;
   setSessionManually: (session: {
     user: UserContextType;
@@ -398,6 +400,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       productTypeIds?: string;
       keyword?: string;
       sort?: string;
+      minPrice?: number;
+      maxPrice?: number;
     }): Promise<ProductItem[] & { pagination?: { page: number; pages: number; records: number } }> => {
       let activeConsumerToken = consumerToken;
 
@@ -468,6 +472,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         if (sort) {
           url += `&sort=${encodeURIComponent(sort)}`;
+        }
+        if (params?.minPrice !== undefined && params?.minPrice !== null) {
+          url += `&min_price=${encodeURIComponent(String(params.minPrice))}`;
+        }
+        if (params?.maxPrice !== undefined && params?.maxPrice !== null) {
+          url += `&max_price=${encodeURIComponent(String(params.maxPrice))}`;
         }
 
         const data = await api.get<any>(url, { headers, cacheTtlMs: 30000 });
